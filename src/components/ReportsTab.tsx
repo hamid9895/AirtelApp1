@@ -40,11 +40,11 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
    * Compiles total collections, shortages, active days, averages, and rates per agent.
    */
   const fscPerformanceData = useMemo(() => {
-    const fscs = allUsers.filter(u => u.role === 'FSC');
+    const fscs = (allUsers || []).filter(u => u.role === 'FSC');
     return fscs.map(fsc => {
       // Fetch approved sales to compute hard metrics
-      const fscSales = sales.filter(s => s.fscId === fsc.id && s.status === 'Approved');
-      const fscAllocations = allocations.filter(a => a.fscId === fsc.id);
+      const fscSales = (sales || []).filter(s => s.fscId === fsc.id && s.status === 'Approved');
+      const fscAllocations = (allocations || []).filter(a => a.fscId === fsc.id);
       
       const totalAllocated = fscAllocations.reduce((sum, a) => sum + a.totalAllocated, 0);
       const totalAllocatedSims = fscAllocations.reduce((sum, a) => sum + a.sim, 0);
@@ -80,8 +80,8 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
    * Computes available stock pools, distributions, and remaining available cash & SIM stock.
    */
   const inventoryFlowData = useMemo(() => {
-    return dailyStocks.map(stock => {
-      const dateAllocations = allocations.filter(a => a.date === stock.date);
+    return (dailyStocks || []).map(stock => {
+      const dateAllocations = (allocations || []).filter(a => a.date === stock.date);
       const totalAllocatedAmt = dateAllocations.reduce((sum, a) => sum + a.totalAllocated, 0);
       const totalAllocatedSims = dateAllocations.reduce((sum, a) => sum + a.sim, 0);
       
@@ -108,9 +108,9 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
    * Compares approved liabilities, pending sheet projections, and calculates total exposure.
    */
   const shortageLiabilityData = useMemo(() => {
-    const fscs = allUsers.filter(u => u.role === 'FSC');
+    const fscs = (allUsers || []).filter(u => u.role === 'FSC');
     return fscs.map(fsc => {
-      const fscSales = sales.filter(s => s.fscId === fsc.id);
+      const fscSales = (sales || []).filter(s => s.fscId === fsc.id);
       const approvedSales = fscSales.filter(s => s.status === 'Approved');
       const pendingSales = fscSales.filter(s => s.status === 'Pending');
       

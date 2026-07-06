@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS users (
   name TEXT NOT NULL,
   role TEXT NOT NULL,
   password_hash TEXT NOT NULL,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  photo TEXT
 );
 
 CREATE TABLE IF NOT EXISTS daily_stocks (
@@ -20,7 +21,8 @@ CREATE TABLE IF NOT EXISTS daily_stocks (
   flexy_claim2 REAL NOT NULL,
   sim REAL NOT NULL,
   created_at TEXT NOT NULL,
-  created_by TEXT
+  created_by TEXT,
+  custom_fields TEXT
 );
 
 CREATE TABLE IF NOT EXISTS allocations (
@@ -37,7 +39,15 @@ CREATE TABLE IF NOT EXISTS allocations (
   sim REAL NOT NULL,
   total_allocated REAL NOT NULL,
   created_at TEXT NOT NULL,
-  created_by TEXT
+  created_by TEXT,
+  custom_fields TEXT
+);
+
+CREATE TABLE IF NOT EXISTS custom_field_configs (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL,
+  target TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS sales (

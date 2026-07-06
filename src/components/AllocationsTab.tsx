@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { TrendingUp, Users, Plus, ChevronLeft, Calendar, AlertTriangle } from 'lucide-react';
-import { Allocation, UserDto, DailyStock } from '../types';
+import { TrendingUp, Users, Plus, ChevronLeft, Calendar, AlertTriangle, Info } from 'lucide-react';
+import { Allocation, UserDto, DailyStock, CustomFieldConfig } from '../types';
 import { DataGrid, GridColumn } from './DataGrid';
 
 interface AllocationsTabProps {
@@ -8,7 +8,7 @@ interface AllocationsTabProps {
   fscUsersList: UserDto[];
   dailyStocks: DailyStock[];
   onDeleteAllocation: (id: string) => void;
-  onSubmitAllocation: (e: React.FormEvent) => void;
+  onSubmitAllocation: (e: React.FormEvent, customFields?: Record<string, string | number>) => void;
   allocDate: string;
   setAllocDate: (v: string) => void;
   allocFscId: string;
@@ -34,6 +34,8 @@ interface AllocationsTabProps {
   onEditAllocationClick: (alloc: Allocation) => void;
   editingAllocId: string | null;
   onCancelEdit: () => void;
+
+  customFieldConfigs: CustomFieldConfig[];
 }
 
 export const AllocationsTab: React.FC<AllocationsTabProps> = ({
@@ -64,12 +66,14 @@ export const AllocationsTab: React.FC<AllocationsTabProps> = ({
   setAllocSim,
   onEditAllocationClick,
   editingAllocId,
-  onCancelEdit
+  onCancelEdit,
+  customFieldConfigs
 }) => {
   // --- LOCAL NAVIGATION STATE ---
   // List-first separation as requested
   const [viewMode, setViewMode] = useState<'list' | 'add' | 'edit'>('list');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [localCustomFields, setLocalCustomFields] = useState<Record<string, string | number>>({});
 
   // --- SEPARATED CALCULATIONS & CONTROLLERS ---
 
@@ -101,10 +105,17 @@ export const AllocationsTab: React.FC<AllocationsTabProps> = ({
   useEffect(() => {
     if (editingAllocId) {
       setViewMode('edit');
-    } else if (viewMode === 'edit') {
-      setViewMode('list');
+      const matchingAlloc = allocations.find(a => a.id === editingAllocId);
+      if (matchingAlloc) {
+        setLocalCustomFields(matchingAlloc.customFields || {});
+      }
+    } else {
+      setLocalCustomFields({});
+      if (viewMode === 'edit') {
+        setViewMode('list');
+      }
     }
-  }, [editingAllocId]);
+  }, [editingAllocId, allocations]);
 
   /**
    * Initializes editing session by invoking parent state setup and toggling UI screens.
@@ -119,6 +130,7 @@ export const AllocationsTab: React.FC<AllocationsTabProps> = ({
    */
   const handleReturnToList = () => {
     onCancelEdit();
+    setLocalCustomFields({});
     setViewMode('list');
     setShowConfirmModal(false);
   };
@@ -136,12 +148,20 @@ export const AllocationsTab: React.FC<AllocationsTabProps> = ({
    */
   const handleConfirmSave = () => {
     setShowConfirmModal(false);
-    onSubmitAllocation({ preventDefault: () => {} } as any);
+    onSubmitAllocation({ preventDefault: () => {} } as any, localCustomFields);
+    setLocalCustomFields({});
     setViewMode('list');
   };
 
+  const handleCustomFieldChange = (fieldId: string, value: string) => {
+    setLocalCustomFields(prev => ({
+      ...prev,
+      [fieldId]: value
+    }));
+  };
+
   // --- DATA GRID COLUMN SCHEMA ---
-  const allocationColumns: GridColumn<Allocation>[] = [
+  const baseColumns: GridColumn<Allocation>[] = [
     { 
       key: 'date', 
       label: 'Distribution Date', 
@@ -170,6 +190,23 @@ export const AllocationsTab: React.FC<AllocationsTabProps> = ({
     { key: 'totalAllocated', label: 'Distributed Credit (INR)', type: 'currency', sortable: true },
     { key: 'sim', label: 'Allocated SIM Cards', type: 'number', sortable: true, render: (r) => <span className="font-semibold text-slate-650">{r.sim} SIMs</span> },
   ];
+
+  // Dynamically append custom fields to columns list
+  const activeFscConfigs = customFieldConfigs.filter(c => c.target === 'fsc');
+  const dynamicColumns = activeFscConfigs.map(c => ({
+    key: `cf_${c.id}` as any,
+    label: c.name,
+    type: (c.type === 'number' ? 'number' : c.type === 'date' ? 'date' : 'string') as any,
+    sortable: true,
+    render: (r: Allocation) => {
+      const val = r.customFields?.[c.id];
+      if (val === undefined || val === null || val === '') return <span className="text-slate-300">-</span>;
+      if (c.type === 'number') return <span className="font-bold text-slate-600">{Number(val).toLocaleString()}</span>;
+      return <span className="text-slate-600 font-medium">{val}</span>;
+    }
+  }));
+
+  const allocationColumns = [...baseColumns, ...dynamicColumns];
 
   return (
     <div className="space-y-6">
@@ -453,6 +490,34 @@ export const AllocationsTab: React.FC<AllocationsTabProps> = ({
                 </div>
               </div>
             </div>
+
+            {/* DYNAMIC CUSTOM FIELDS SECTION */}
+            {activeFscConfigs.length > 0 && (
+              <div className="space-y-4 bg-slate-50/50 p-4 rounded-2xl border border-slate-100/75">
+                <div className="flex items-center gap-1.5 border-b border-slate-200 pb-1.5">
+                  <Info className="w-3.5 h-3.5 text-[#EE1D23]" />
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                    Custom Fields (Information Only)
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {activeFscConfigs.map(c => (
+                    <div key={c.id} className="space-y-1">
+                      <label className="text-[10px] font-extrabold uppercase text-slate-500">
+                        {c.name}
+                      </label>
+                      <input
+                        type={c.type === 'number' ? 'number' : c.type === 'date' ? 'date' : 'text'}
+                        value={localCustomFields[c.id] || ''}
+                        onChange={(e) => handleCustomFieldChange(c.id, e.target.value)}
+                        placeholder={`Enter ${c.name.toLowerCase()}...`}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-[#EE1D23]"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Action Buttons Row */}
             <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">

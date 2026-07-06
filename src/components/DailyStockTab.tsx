@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { ClipboardList, Calendar, Plus, ChevronLeft } from 'lucide-react';
-import { DailyStock } from '../types';
+import { ClipboardList, Calendar, Plus, ChevronLeft, Info } from 'lucide-react';
+import { DailyStock, CustomFieldConfig } from '../types';
 import { DataGrid, GridColumn } from './DataGrid';
 
 interface DailyStockTabProps {
   dailyStocks: DailyStock[];
   onDeleteStock: (id: string) => void;
-  onSubmitStock: (e: React.FormEvent) => void;
+  onSubmitStock: (e: React.FormEvent, customFields?: Record<string, string | number>) => void;
   stockDate: string;
   setStockDate: (v: string) => void;
   stockOpeningAmount: number;
@@ -26,6 +26,8 @@ interface DailyStockTabProps {
   onEditStockClick: (stock: DailyStock) => void;
   editingStockId: string | null;
   onCancelEdit: () => void;
+
+  customFieldConfigs: CustomFieldConfig[];
 }
 
 export const DailyStockTab: React.FC<DailyStockTabProps> = ({
@@ -48,50 +50,58 @@ export const DailyStockTab: React.FC<DailyStockTabProps> = ({
   setStockSim,
   onEditStockClick,
   editingStockId,
-  onCancelEdit
+  onCancelEdit,
+  customFieldConfigs
 }) => {
   // --- LOCAL NAVIGATION STATE ---
-  // Default mode is 'list' as requested. switches to 'add' or 'edit' when creating/modifying
   const [viewMode, setViewMode] = useState<'list' | 'add' | 'edit'>('list');
+  const [localCustomFields, setLocalCustomFields] = useState<Record<string, string | number>>({});
 
   // Sync component view mode if central editing states change
   useEffect(() => {
     if (editingStockId) {
       setViewMode('edit');
-    } else if (viewMode === 'edit') {
-      setViewMode('list');
+      const matchingStock = dailyStocks.find(s => s.id === editingStockId);
+      if (matchingStock) {
+        setLocalCustomFields(matchingStock.customFields || {});
+      }
+    } else {
+      setLocalCustomFields({});
+      if (viewMode === 'edit') {
+        setViewMode('list');
+      }
     }
-  }, [editingStockId]);
+  }, [editingStockId, dailyStocks]);
 
   // --- SEPARATED HELPER FUNCTIONS ---
 
-  /**
-   * Initializes editing session by invoking parent setup and changing visual screens.
-   */
   const handleEditTrigger = (stock: DailyStock) => {
     onEditStockClick(stock);
     setViewMode('edit');
   };
 
-  /**
-   * Closes active creation/edit forms and safely navigates back to grid list view.
-   */
   const handleReturnToList = () => {
     onCancelEdit();
+    setLocalCustomFields({});
     setViewMode('list');
   };
 
-  /**
-   * Dispatches form submissions and resets local view to list screen on success.
-   */
   const handleFormSubmission = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmitStock(e);
+    onSubmitStock(e, localCustomFields);
+    setLocalCustomFields({});
     setViewMode('list');
+  };
+
+  const handleCustomFieldChange = (fieldId: string, value: string) => {
+    setLocalCustomFields(prev => ({
+      ...prev,
+      [fieldId]: value
+    }));
   };
 
   // --- DATA GRID COLUMN SCHEMAS ---
-  const stockColumns: GridColumn<DailyStock>[] = [
+  const baseColumns: GridColumn<DailyStock>[] = [
     { 
       key: 'date', 
       label: 'Date', 
@@ -134,8 +144,25 @@ export const DailyStockTab: React.FC<DailyStockTabProps> = ({
     },
   ];
 
+  // Dynamically append custom fields to columns list
+  const activeStockConfigs = customFieldConfigs.filter(c => c.target === 'stock');
+  const dynamicColumns = activeStockConfigs.map(c => ({
+    key: `cf_${c.id}` as any,
+    label: c.name,
+    type: (c.type === 'number' ? 'number' : c.type === 'date' ? 'date' : 'string') as any,
+    sortable: true,
+    render: (r: DailyStock) => {
+      const val = r.customFields?.[c.id];
+      if (val === undefined || val === null || val === '') return <span className="text-slate-300">-</span>;
+      if (c.type === 'number') return <span className="font-bold text-slate-600">{Number(val).toLocaleString()}</span>;
+      return <span className="text-slate-600 font-medium">{val}</span>;
+    }
+  }));
+
+  const stockColumns = [...baseColumns, ...dynamicColumns];
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" id="daily-stock-tab-root">
       
       {/* 1. LIST VIEW SCREEN (Shown by default) */}
       {viewMode === 'list' && (
@@ -148,12 +175,15 @@ export const DailyStockTab: React.FC<DailyStockTabProps> = ({
                 <ClipboardList className="w-5 h-5 text-[#EE1D23]" />
                 Daily Vault & Inventory Registry
               </h2>
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">List of recorded daily opening stocks & airtime balances</p>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                List of recorded daily opening stocks & airtime balances
+              </p>
             </div>
 
             <button
               onClick={() => {
                 onCancelEdit(); // Clear fields first
+                setLocalCustomFields({});
                 setViewMode('add');
               }}
               className="bg-[#EE1D23] hover:bg-red-700 text-white font-extrabold text-xs px-5 py-2.5 rounded-2xl transition-all shadow-md flex items-center gap-1.5 cursor-pointer select-none"
@@ -245,7 +275,9 @@ export const DailyStockTab: React.FC<DailyStockTabProps> = ({
             </div>
 
             <div className="space-y-1 bg-slate-50/50 p-4 rounded-2xl border border-slate-100/75 space-y-4">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 pb-1.5">Flexy Airtime & Claims Allocation</p>
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 pb-1.5">
+                Flexy Airtime & Claims Allocation
+              </p>
               
               <div className="space-y-1">
                 <label className="text-[10px] font-extrabold uppercase text-slate-400">Primary Flexy Balance (₹)</label>
@@ -292,6 +324,34 @@ export const DailyStockTab: React.FC<DailyStockTabProps> = ({
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-[#EE1D23]"
               />
             </div>
+
+            {/* DYNAMIC CUSTOM FIELDS SECTION */}
+            {activeStockConfigs.length > 0 && (
+              <div className="space-y-4 bg-slate-50/50 p-4 rounded-2xl border border-slate-100/75">
+                <div className="flex items-center gap-1.5 border-b border-slate-200 pb-1.5">
+                  <Info className="w-3.5 h-3.5 text-[#EE1D23]" />
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                    Custom Fields (Information Only)
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {activeStockConfigs.map(c => (
+                    <div key={c.id} className="space-y-1">
+                      <label className="text-[10px] font-extrabold uppercase text-slate-500">
+                        {c.name}
+                      </label>
+                      <input
+                        type={c.type === 'number' ? 'number' : c.type === 'date' ? 'date' : 'text'}
+                        value={localCustomFields[c.id] || ''}
+                        onChange={(e) => handleCustomFieldChange(c.id, e.target.value)}
+                        placeholder={`Enter ${c.name.toLowerCase()}...`}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-[#EE1D23]"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Buttons Row */}
             <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">

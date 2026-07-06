@@ -22,6 +22,14 @@ interface User {
   role: 'Admin' | 'Manager' | 'Approver' | 'FSC';
   passwordHash: string;
   createdAt: string;
+  photo?: string | null;
+}
+
+interface CustomFieldConfig {
+  id: string;
+  name: string;
+  type: 'text' | 'number' | 'date';
+  target: 'fsc' | 'stock';
 }
 
 interface DailyStock {
@@ -35,6 +43,7 @@ interface DailyStock {
   sim: number;
   createdAt: string;
   createdBy: string | null;
+  customFields?: Record<string, string | number>;
 }
 
 interface Allocation {
@@ -52,6 +61,7 @@ interface Allocation {
   totalAllocated: number; // computed
   createdAt: string;
   createdBy: string | null;
+  customFields?: Record<string, string | number>;
 }
 
 interface Sale {
@@ -89,6 +99,7 @@ interface DatabaseSchema {
   dailyStocks: DailyStock[];
   allocations: Allocation[];
   sales: Sale[];
+  customFieldConfigs: CustomFieldConfig[];
 }
 
 // --- PASSWORD HASHING ---
@@ -154,7 +165,8 @@ function loadDatabase(): DatabaseSchema {
       users: [],
       dailyStocks: [],
       allocations: [],
-      sales: []
+      sales: [],
+      customFieldConfigs: []
     };
     
     // Create Default Seed Users
@@ -374,6 +386,9 @@ function loadDatabase(): DatabaseSchema {
   
   const raw = fs.readFileSync(DATABASE_FILE, 'utf-8');
   const parsed = JSON.parse(raw);
+  if (!parsed.customFieldConfigs) {
+    parsed.customFieldConfigs = [];
+  }
   memoryDb = parsed;
   return parsed;
 }
@@ -445,7 +460,8 @@ app.post('/api/auth/login', (req, res) => {
       id: user.id,
       email: user.email,
       name: user.name,
-      role: user.role
+      role: user.role,
+      photo: user.photo || null
     }
   });
 });
@@ -463,14 +479,15 @@ app.get('/api/auth/me', authenticateToken, (req: any, res) => {
       id: user.id,
       email: user.email,
       name: user.name,
-      role: user.role
+      role: user.role,
+      photo: user.photo || null
     }
   });
 });
 
 // POST /api/auth/register (Admin Only)
 app.post('/api/auth/register', authenticateToken, requireRole(['Admin']), (req, res) => {
-  const { email, name, role, password } = req.body;
+  const { email, name, role, password, photo } = req.body;
   
   if (!email || !name || !role || !password) {
     return res.status(400).json({ success: false, error: 'All fields (email, name, role, password) are required' });
@@ -497,7 +514,8 @@ app.post('/api/auth/register', authenticateToken, requireRole(['Admin']), (req, 
     name,
     role: role as any,
     passwordHash: hashPassword(password),
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    photo: photo || null
   };
   
   db.users.push(newUser);
@@ -509,7 +527,8 @@ app.post('/api/auth/register', authenticateToken, requireRole(['Admin']), (req, 
       id: newUser.id,
       email: newUser.email,
       name: newUser.name,
-      role: newUser.role
+      role: newUser.role,
+      photo: newUser.photo
     }
   });
 });
@@ -522,7 +541,8 @@ app.get('/api/auth/users', authenticateToken, requireRole(['Manager', 'Admin']),
     email: u.email,
     name: u.name,
     role: u.role,
-    createdAt: u.createdAt
+    createdAt: u.createdAt,
+    photo: u.photo || null
   }));
   res.json({ success: true, users: usersDto });
 });
@@ -541,7 +561,44 @@ app.get('/api/auth/users/:id', authenticateToken, (req, res) => {
       email: user.email,
       name: user.name,
       role: user.role,
-      createdAt: user.createdAt
+      createdAt: user.createdAt,
+      photo: user.photo || null
+    }
+  });
+});
+
+// PUT /api/auth/profile (Users can update their own details/photo)
+app.put('/api/auth/profile', authenticateToken, (req: any, res) => {
+  const db = loadDatabase();
+  const userIdx = db.users.findIndex(u => u.id === req.user.id);
+  if (userIdx === -1) {
+    return res.status(404).json({ success: false, error: 'User not found' });
+  }
+  
+  const { name, password, photo } = req.body;
+  const user = db.users[userIdx];
+  
+  if (name) user.name = name;
+  if (photo !== undefined) user.photo = photo;
+  
+  if (password) {
+    if (password.length < 6) {
+      return res.status(400).json({ success: false, error: 'Password must be at least 6 characters' });
+    }
+    user.passwordHash = hashPassword(password);
+  }
+  
+  db.users[userIdx] = user;
+  saveDatabase(db);
+  
+  res.json({
+    success: true,
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      photo: user.photo || null
     }
   });
 });
@@ -554,7 +611,7 @@ app.put('/api/auth/users/:id', authenticateToken, requireRole(['Admin']), (req, 
     return res.status(404).json({ success: false, error: 'User not found' });
   }
   
-  const { name, role, password, email } = req.body;
+  const { name, role, password, email, photo } = req.body;
   const user = db.users[userIdx];
   
   if (email && email.toLowerCase() !== user.email.toLowerCase()) {
@@ -566,6 +623,7 @@ app.put('/api/auth/users/:id', authenticateToken, requireRole(['Admin']), (req, 
   }
   
   if (name) user.name = name;
+  if (photo !== undefined) user.photo = photo;
   
   if (role) {
     const allowedRoles = ['Admin', 'Manager', 'Approver', 'FSC'];
@@ -591,7 +649,8 @@ app.put('/api/auth/users/:id', authenticateToken, requireRole(['Admin']), (req, 
       id: user.id,
       email: user.email,
       name: user.name,
-      role: user.role
+      role: user.role,
+      photo: user.photo || null
     }
   });
 });
@@ -724,7 +783,7 @@ app.get('/api/stock/date/:date', authenticateToken, requireRole(['Manager', 'Adm
 
 // POST /api/stock
 app.post('/api/stock', authenticateToken, requireRole(['Manager', 'Admin']), (req: any, res) => {
-  const { date, openingAmount, openingSim, flexy, flexyClaim1, flexyClaim2, sim } = req.body;
+  const { date, openingAmount, openingSim, flexy, flexyClaim1, flexyClaim2, sim, customFields } = req.body;
   if (!date) {
     return res.status(400).json({ success: false, error: 'Date is required' });
   }
@@ -745,7 +804,8 @@ app.post('/api/stock', authenticateToken, requireRole(['Manager', 'Admin']), (re
     flexyClaim2: Number(flexyClaim2 || 0),
     sim: Number(sim || 0),
     createdAt: new Date().toISOString(),
-    createdBy: req.user.id
+    createdBy: req.user.id,
+    customFields: customFields || {}
   };
   
   db.dailyStocks.push(newStock);
@@ -764,7 +824,7 @@ app.put('/api/stock/:id', authenticateToken, requireRole(['Manager', 'Admin']), 
   }
   
   const current = db.dailyStocks[idx];
-  const { openingAmount, openingSim, flexy, flexyClaim1, flexyClaim2, sim } = req.body;
+  const { openingAmount, openingSim, flexy, flexyClaim1, flexyClaim2, sim, customFields } = req.body;
   
   if (openingAmount !== undefined) current.openingAmount = Number(openingAmount);
   if (openingSim !== undefined) current.openingSim = Number(openingSim);
@@ -772,6 +832,7 @@ app.put('/api/stock/:id', authenticateToken, requireRole(['Manager', 'Admin']), 
   if (flexyClaim1 !== undefined) current.flexyClaim1 = Number(flexyClaim1);
   if (flexyClaim2 !== undefined) current.flexyClaim2 = Number(flexyClaim2);
   if (sim !== undefined) current.sim = Number(sim);
+  if (customFields !== undefined) current.customFields = customFields;
   
   db.dailyStocks[idx] = current;
   saveDatabase(db);
@@ -842,7 +903,7 @@ app.post('/api/allocation', authenticateToken, requireRole(['Manager', 'Admin'])
   const { 
     date, fscId, openingBalance, openingSim, 
     autoRefill1, autoRefill2, autoRefill3, 
-    ecManual1, ecManual2, sim 
+    ecManual1, ecManual2, sim, customFields 
   } = req.body;
   
   if (!date || !fscId) {
@@ -882,7 +943,8 @@ app.post('/api/allocation', authenticateToken, requireRole(['Manager', 'Admin'])
     sim: Number(sim || 0),
     totalAllocated: totalAlloc,
     createdAt: new Date().toISOString(),
-    createdBy: req.user.id
+    createdBy: req.user.id,
+    customFields: customFields || {}
   };
   
   db.allocations.push(newAlloc);
@@ -909,7 +971,7 @@ app.put('/api/allocation/:id', authenticateToken, requireRole(['Manager', 'Admin
   const { 
     openingBalance, openingSim, 
     autoRefill1, autoRefill2, autoRefill3, 
-    ecManual1, ecManual2, sim 
+    ecManual1, ecManual2, sim, customFields 
   } = req.body;
   
   if (openingBalance !== undefined) current.openingBalance = Number(openingBalance);
@@ -920,6 +982,7 @@ app.put('/api/allocation/:id', authenticateToken, requireRole(['Manager', 'Admin
   if (ecManual1 !== undefined) current.ecManual1 = Number(ecManual1);
   if (ecManual2 !== undefined) current.ecManual2 = Number(ecManual2);
   if (sim !== undefined) current.sim = Number(sim);
+  if (customFields !== undefined) current.customFields = customFields;
   
   current.totalAllocated = current.openingBalance + current.autoRefill1 + current.autoRefill2 + current.autoRefill3 + current.ecManual1 + current.ecManual2;
   
@@ -951,6 +1014,78 @@ app.delete('/api/allocation/:id', authenticateToken, requireRole(['Manager', 'Ad
   
   saveDatabase(db);
   res.status(204).end();
+});
+
+
+// 3.5 CUSTOM FIELD CONFIG ENDPOINTS (Manager or Admin Only)
+
+// GET /api/custom-fields
+app.get('/api/custom-fields', authenticateToken, (req, res) => {
+  const db = loadDatabase();
+  res.json({ success: true, customFieldConfigs: db.customFieldConfigs || [] });
+});
+
+// POST /api/custom-fields
+app.post('/api/custom-fields', authenticateToken, requireRole(['Admin', 'Manager']), (req, res) => {
+  const { name, type, target } = req.body;
+  if (!name || !type || !target) {
+    return res.status(400).json({ success: false, error: 'Fields name, type, and target are required' });
+  }
+  
+  const db = loadDatabase();
+  if (!db.customFieldConfigs) {
+    db.customFieldConfigs = [];
+  }
+  
+  const newConfig: CustomFieldConfig = {
+    id: `cf-${crypto.randomBytes(8).toString('hex')}`,
+    name,
+    type: type as any,
+    target: target as any
+  };
+  
+  db.customFieldConfigs.push(newConfig);
+  saveDatabase(db);
+  
+  res.status(201).json({ success: true, customFieldConfig: newConfig });
+});
+
+// DELETE /api/custom-fields/:id
+app.delete('/api/custom-fields/:id', authenticateToken, requireRole(['Admin', 'Manager']), (req, res) => {
+  const db = loadDatabase();
+  if (!db.customFieldConfigs) {
+    db.customFieldConfigs = [];
+  }
+  
+  const idx = db.customFieldConfigs.findIndex(c => c.id === req.params.id);
+  if (idx === -1) {
+    return res.status(404).json({ success: false, error: 'Custom field configuration not found' });
+  }
+  
+  const configToDelete = db.customFieldConfigs[idx];
+  db.customFieldConfigs.splice(idx, 1);
+  
+  // Clean up references in daily stocks or allocations
+  if (configToDelete.target === 'stock') {
+    db.dailyStocks = db.dailyStocks.map(s => {
+      if (s.customFields && s.customFields[configToDelete.id] !== undefined) {
+        const { [configToDelete.id]: _, ...rest } = s.customFields;
+        return { ...s, customFields: rest };
+      }
+      return s;
+    });
+  } else if (configToDelete.target === 'fsc') {
+    db.allocations = db.allocations.map(a => {
+      if (a.customFields && a.customFields[configToDelete.id] !== undefined) {
+        const { [configToDelete.id]: _, ...rest } = a.customFields;
+        return { ...a, customFields: rest };
+      }
+      return a;
+    });
+  }
+  
+  saveDatabase(db);
+  res.json({ success: true });
 });
 
 

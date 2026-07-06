@@ -26,7 +26,7 @@ const fetch = appFetch;
 import { AlertCircle, CheckCircle, RefreshCw, Sparkles } from 'lucide-react';
 
 // Import Types and Subcomponents
-import { UserDto, DailyStock, Allocation, Sale, ReportSummary } from './types';
+import { UserDto, DailyStock, Allocation, Sale, ReportSummary, CustomFieldConfig } from './types';
 import { LoginView } from './components/LoginView';
 import { Header } from './components/Header';
 import { DashboardTab } from './components/DashboardTab';
@@ -35,6 +35,7 @@ import { AllocationsTab } from './components/AllocationsTab';
 import { SalesTab } from './components/SalesTab';
 import { ReportsTab } from './components/ReportsTab';
 import { UsersTab } from './components/UsersTab';
+import { MastersTab } from './components/MastersTab';
 
 export default function App() {
   // --- CORE STATE MANAGERS ---
@@ -54,13 +55,14 @@ export default function App() {
   const [loginPassword, setLoginPassword] = useState<string>('manager123');
 
   // Navigation controller
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'dailyStock' | 'allocations' | 'sales' | 'reports' | 'users'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'dailyStock' | 'allocations' | 'sales' | 'reports' | 'users' | 'masters-fsc' | 'masters-stock'>('dashboard');
 
   // Primary Data Stores
   const [dailyStocks, setDailyStocks] = useState<DailyStock[]>([]);
   const [allocations, setAllocations] = useState<Allocation[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [allUsers, setAllUsers] = useState<UserDto[]>([]);
+  const [customFieldConfigs, setCustomFieldConfigs] = useState<CustomFieldConfig[]>([]);
 
   // Filtering & Query States
   const [globalSearch, setGlobalSearch] = useState<string>('');
@@ -109,6 +111,7 @@ export default function App() {
   const [userEmail, setUserEmail] = useState<string>('');
   const [userRole, setUserRole] = useState<'Admin' | 'Manager' | 'Approver' | 'FSC'>('FSC');
   const [userPassword, setUserPassword] = useState<string>('');
+  const [userPhoto, setUserPhoto] = useState<string | null>(null);
 
   // Editing Identifier References
   const [editingStockId, setEditingStockId] = useState<string | null>(null);
@@ -336,6 +339,13 @@ export default function App() {
       const salesData = await salesRes.json();
       if (salesData.success) setSales(salesData.sales);
 
+      // Retrieve custom fields configurations
+      const configsRes = await fetch('/api/custom-fields', { headers: { 'Authorization': `Bearer ${token}` } });
+      const configsData = await configsRes.json();
+      if (configsData.success) {
+        setCustomFieldConfigs(configsData.customFieldConfigs);
+      }
+
       // Trigger automatic report compilation on tab load
       if (activeTab === 'reports') {
         fetchReportSummaries();
@@ -413,6 +423,7 @@ export default function App() {
     setUserEmail(target.email);
     setUserRole(target.role);
     setUserPassword(''); // Optional password reset on edits
+    setUserPhoto(target.photo || null);
   };
 
   /**
@@ -467,10 +478,11 @@ export default function App() {
     setUserEmail('');
     setUserRole('FSC');
     setUserPassword('');
+    setUserPhoto(null);
   };
 
   // Log Daily Opening Stock Balance
-  const handleCreateStock = async (e: React.FormEvent) => {
+  const handleCreateStock = async (e: React.FormEvent, customFields?: Record<string, string | number>) => {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -491,7 +503,8 @@ export default function App() {
           flexy: stockFlexy,
           flexyClaim1: stockFlexyClaim1,
           flexyClaim2: stockFlexyClaim2,
-          sim: stockSim
+          sim: stockSim,
+          customFields
         })
       });
       const data = await response.json();
@@ -508,7 +521,7 @@ export default function App() {
   };
 
   // Log Coordinator Stock Allocation
-  const handleCreateAllocation = async (e: React.FormEvent) => {
+  const handleCreateAllocation = async (e: React.FormEvent, customFields?: Record<string, string | number>) => {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -532,7 +545,8 @@ export default function App() {
           autoRefill3: allocAutoRefill3,
           ecManual1: allocEcManual1,
           ecManual2: allocEcManual2,
-          sim: allocSim
+          sim: allocSim,
+          customFields
         })
       });
       const data = await response.json();
@@ -761,7 +775,8 @@ export default function App() {
           email: userEmail,
           name: userName,
           role: userRole,
-          password: userPassword || undefined
+          password: userPassword || undefined,
+          photo: userPhoto
         })
       });
       const data = await res.json();
@@ -910,6 +925,7 @@ export default function App() {
             onEditStockClick={handleEditStockClick}
             editingStockId={editingStockId}
             onCancelEdit={handleCancelEdit}
+            customFieldConfigs={customFieldConfigs}
           />
         )}
 
@@ -944,6 +960,7 @@ export default function App() {
             onEditAllocationClick={handleEditAllocClick}
             editingAllocId={editingAllocId}
             onCancelEdit={handleCancelEdit}
+            customFieldConfigs={customFieldConfigs}
           />
         )}
 
@@ -1003,6 +1020,10 @@ export default function App() {
             onCompileLedger={fetchReportSummaries}
             reportSummaries={reportSummaries}
             onExportCSV={handleExportCSV}
+            sales={sales}
+            allocations={allocations}
+            dailyStocks={dailyStocks}
+            allUsers={allUsers}
           />
         )}
 
@@ -1024,6 +1045,29 @@ export default function App() {
             onEditUserClick={handleEditUserClick}
             editingUserId={editingUserId}
             onCancelEdit={handleCancelEdit}
+            userPhoto={userPhoto}
+            setUserPhoto={setUserPhoto}
+            token={token}
+            onProfileUpdate={(updatedUser) => {
+              setUser(updatedUser);
+              loadTabContent();
+            }}
+          />
+        )}
+
+        {/* Tab 7: FSC Custom Fields configuration */}
+        {activeTab === 'masters-fsc' && (user.role === 'Admin' || user.role === 'Manager') && (
+          <MastersTab
+            target="fsc"
+            token={token}
+          />
+        )}
+
+        {/* Tab 8: Daily Stock Custom Fields configuration */}
+        {activeTab === 'masters-stock' && (user.role === 'Admin' || user.role === 'Manager') && (
+          <MastersTab
+            target="stock"
+            token={token}
           />
         )}
 

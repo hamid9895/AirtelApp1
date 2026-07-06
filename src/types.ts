@@ -6,6 +6,14 @@ export interface UserDto {
   email: string;
   name: string;
   role: 'Admin' | 'Manager' | 'Approver' | 'FSC';
+  photo?: string | null; // Base64 encoded profile picture
+}
+
+export interface CustomFieldConfig {
+  id: string;
+  name: string;
+  type: 'text' | 'number' | 'date';
+  target: 'fsc' | 'stock';
 }
 
 export interface DailyStock {
@@ -19,6 +27,7 @@ export interface DailyStock {
   sim: number;
   createdAt: string;
   createdBy: string | null;
+  customFields?: Record<string, string | number>; // Dynamic values mapped by config ID
 }
 
 export interface Allocation {
@@ -37,6 +46,7 @@ export interface Allocation {
   totalAllocated: number;
   createdAt: string;
   createdBy: string | null;
+  customFields?: Record<string, string | number>; // Dynamic values mapped by config ID
 }
 
 export interface Sale {
