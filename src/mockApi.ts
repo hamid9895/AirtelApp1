@@ -442,6 +442,47 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
     }, 211);
   }
 
+  // PUT USER (Admin Only)
+  if (cleanUrl.startsWith('/api/auth/users/') && method === 'PUT') {
+    const user = getUserFromToken(headers);
+    if (!user || user.role !== 'Admin') {
+      return mockResponse({ success: false, error: 'Admin access required' }, 403);
+    }
+
+    const userId = cleanUrl.substring('/api/auth/users/'.length);
+    const users = getMockList<User>(STORAGE_KEYS.USERS);
+    const idx = users.findIndex(u => u.id === userId);
+    if (idx === -1) return mockResponse({ success: false, error: 'User not found' }, 404);
+
+    const { name, role, password, email } = body;
+    const targetUser = users[idx];
+
+    if (email && email.toLowerCase() !== targetUser.email.toLowerCase()) {
+      const emailDup = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+      if (emailDup) {
+        return mockResponse({ success: false, error: 'Email address is already in use by another user' }, 400);
+      }
+      targetUser.email = email;
+    }
+
+    if (name) targetUser.name = name;
+    if (role) targetUser.role = role;
+    if (password) targetUser.passwordHash = password; // raw temporary match for mock
+
+    users[idx] = targetUser;
+    saveMockList(STORAGE_KEYS.USERS, users);
+
+    return mockResponse({
+      success: true,
+      user: {
+        id: targetUser.id,
+        email: targetUser.email,
+        name: targetUser.name,
+        role: targetUser.role
+      }
+    });
+  }
+
   // DELETE USER (Admin Only)
   if (cleanUrl.startsWith('/api/auth/users/') && method === 'DELETE') {
     const user = getUserFromToken(headers);
@@ -513,6 +554,34 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
     return mockResponse(null, 204);
   }
 
+  // PUT /api/stock/:id (Manager / Admin Only)
+  if (cleanUrl.startsWith('/api/stock/') && method === 'PUT') {
+    const user = getUserFromToken(headers);
+    if (!user || !['Admin', 'Manager'].includes(user.role)) {
+      return mockResponse({ success: false, error: 'Privileged access required' }, 403);
+    }
+
+    const stockId = cleanUrl.substring('/api/stock/'.length);
+    const stocks = getMockList<DailyStock>(STORAGE_KEYS.STOCKS);
+    const idx = stocks.findIndex(s => s.id === stockId);
+    if (idx === -1) return mockResponse({ success: false, error: 'Stock entry not found' }, 404);
+
+    const current = stocks[idx];
+    const { openingAmount, openingSim, flexy, flexyClaim1, flexyClaim2, sim } = body;
+
+    if (openingAmount !== undefined) current.openingAmount = Number(openingAmount);
+    if (openingSim !== undefined) current.openingSim = Number(openingSim);
+    if (flexy !== undefined) current.flexy = Number(flexy);
+    if (flexyClaim1 !== undefined) current.flexyClaim1 = Number(flexyClaim1);
+    if (flexyClaim2 !== undefined) current.flexyClaim2 = Number(flexyClaim2);
+    if (sim !== undefined) current.sim = Number(sim);
+
+    stocks[idx] = current;
+    saveMockList(STORAGE_KEYS.STOCKS, stocks);
+
+    return mockResponse({ success: true, dailyStock: current });
+  }
+
   // 5. ALLOCATIONS (Manager/Admin CRUD)
   if (cleanUrl === '/api/allocation') {
     const user = getUserFromToken(headers);
@@ -569,6 +638,49 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
     saveMockList(STORAGE_KEYS.ALLOCATIONS, allocations);
 
     return mockResponse(null, 204);
+  }
+
+  // PUT /api/allocation/:id (Manager / Admin Only)
+  if (cleanUrl.startsWith('/api/allocation/') && method === 'PUT') {
+    const user = getUserFromToken(headers);
+    if (!user || !['Admin', 'Manager'].includes(user.role)) {
+      return mockResponse({ success: false, error: 'Privileged access required' }, 403);
+    }
+
+    const allocId = cleanUrl.substring('/api/allocation/'.length);
+    const allocations = getMockList<Allocation>(STORAGE_KEYS.ALLOCATIONS);
+    const idx = allocations.findIndex(a => a.id === allocId);
+    if (idx === -1) return mockResponse({ success: false, error: 'Allocation not found' }, 404);
+
+    const current = allocations[idx];
+    const { 
+      openingBalance, openingSim, 
+      autoRefill1, autoRefill2, autoRefill3, 
+      ecManual1, ecManual2, sim 
+    } = body;
+
+    if (openingBalance !== undefined) current.openingBalance = Number(openingBalance);
+    if (openingSim !== undefined) current.openingSim = Number(openingSim);
+    if (autoRefill1 !== undefined) current.autoRefill1 = Number(autoRefill1);
+    if (autoRefill2 !== undefined) current.autoRefill2 = Number(autoRefill2);
+    if (autoRefill3 !== undefined) current.autoRefill3 = Number(autoRefill3);
+    if (ecManual1 !== undefined) current.ecManual1 = Number(ecManual1);
+    if (ecManual2 !== undefined) current.ecManual2 = Number(ecManual2);
+    if (sim !== undefined) current.sim = Number(sim);
+
+    current.totalAllocated = current.openingBalance + current.autoRefill1 + current.autoRefill2 + current.autoRefill3 + current.ecManual1 + current.ecManual2;
+
+    allocations[idx] = current;
+    saveMockList(STORAGE_KEYS.ALLOCATIONS, allocations);
+
+    const fscUser = getMockList<User>(STORAGE_KEYS.USERS).find(u => u.id === current.fscId);
+    return mockResponse({ 
+      success: true, 
+      allocation: {
+        ...current,
+        fscName: fscUser ? fscUser.name : 'Unknown FSC'
+      } 
+    });
   }
 
   // 6. SALES WORKFLOW
@@ -718,6 +830,55 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
     saveMockList(STORAGE_KEYS.SALES, sales);
 
     return mockResponse(null, 204);
+  }
+
+  // PUT /api/sale/:id (Only editable in Draft status)
+  if (cleanUrl.startsWith('/api/sale/') && method === 'PUT') {
+    const user = getUserFromToken(headers);
+    if (!user) return mockResponse({ success: false, error: 'Authentication required' }, 401);
+
+    const saleId = cleanUrl.substring('/api/sale/'.length);
+    const sales = getMockList<Sale>(STORAGE_KEYS.SALES);
+    const idx = sales.findIndex(s => s.id === saleId);
+    if (idx === -1) return mockResponse({ success: false, error: 'Sale record not found' }, 404);
+
+    const current = sales[idx];
+    if (user.role === 'FSC' && current.fscId !== user.id) {
+      return mockResponse({ success: false, error: 'Access denied' }, 403);
+    }
+
+    if (current.status !== 'Draft') {
+      return mockResponse({ success: false, error: 'Only sales in Draft status can be modified' }, 400);
+    }
+
+    const { 
+      openingBalance, autoRefill1, autoRefill2, autoRefill3, 
+      ecManual1, ecManual2, closingBalance, 
+      previousShort, saleAmount, openingSim, sim, closingSim, remarks 
+    } = body;
+
+    if (openingBalance !== undefined) current.openingBalance = Number(openingBalance);
+    if (autoRefill1 !== undefined) current.autoRefill1 = Number(autoRefill1);
+    if (autoRefill2 !== undefined) current.autoRefill2 = Number(autoRefill2);
+    if (autoRefill3 !== undefined) current.autoRefill3 = Number(autoRefill3);
+    if (ecManual1 !== undefined) current.ecManual1 = Number(ecManual1);
+    if (ecManual2 !== undefined) current.ecManual2 = Number(ecManual2);
+    if (closingBalance !== undefined) current.closingBalance = Number(closingBalance);
+    if (previousShort !== undefined) current.previousShort = Number(previousShort);
+    if (saleAmount !== undefined) current.saleAmount = Number(saleAmount);
+    if (openingSim !== undefined) current.openingSim = Number(openingSim);
+    if (sim !== undefined) current.sim = Number(sim);
+    if (closingSim !== undefined) current.closingSim = Number(closingSim);
+    if (remarks !== undefined) current.remarks = remarks;
+
+    // Recalculate
+    current.saleTotal = current.openingBalance + current.autoRefill1 + current.autoRefill2 + current.autoRefill3 + current.ecManual1 + current.ecManual2 - current.closingBalance;
+    current.shortAmount = Math.max(0, current.saleTotal - current.saleAmount) + current.previousShort;
+
+    sales[idx] = current;
+    saveMockList(STORAGE_KEYS.SALES, sales);
+
+    return mockResponse({ success: true, sale: current });
   }
 
   // 7. REPORTS GENERATOR (Manager / Admin)

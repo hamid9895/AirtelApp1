@@ -51,18 +51,6 @@
   ],
   "dailyStocks": [
     {
-      "id": "stock-today",
-      "date": "2026-07-06",
-      "openingAmount": 152805,
-      "openingSim": 500,
-      "flexy": 105000,
-      "flexyClaim1": 22000,
-      "flexyClaim2": 15800,
-      "sim": 350,
-      "createdAt": "2026-07-06T15:12:58.085Z",
-      "createdBy": "user-manager-id"
-    },
-    {
       "id": "stock-cec0f53bd511715c",
       "date": "2026-07-07",
       "openingAmount": 150000,

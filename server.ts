@@ -649,12 +649,40 @@ app.post('/api/auth/change-password', authenticateToken, (req: any, res) => {
   res.json({ success: true, message: 'Password updated successfully' });
 });
 
+// Helper to compute a daily stock's closing cash and SIM count on the fly
+function computeStockClosing(stock: any, db: any) {
+  const allocationsOnDate = db.allocations.filter((a: any) => a.date === stock.date);
+  const totalAllocatedCash = allocationsOnDate.reduce((sum: number, a: any) => {
+    return sum + (Number(a.autoRefill1) || 0) + (Number(a.autoRefill2) || 0) + (Number(a.autoRefill3) || 0) + (Number(a.ecManual1) || 0) + (Number(a.ecManual2) || 0);
+  }, 0);
+  const totalAllocatedSim = allocationsOnDate.reduce((sum: number, a: any) => sum + (Number(a.sim) || 0), 0);
+
+  const approvedSalesOnDate = db.sales.filter((s: any) => s.date === stock.date && s.status === 'Approved');
+  const totalApprovedRemittance = approvedSalesOnDate.reduce((sum: number, s: any) => sum + (Number(s.saleAmount) || 0), 0);
+
+  const closingAmount = stock.openingAmount + stock.flexy + (stock.flexyClaim1 || 0) + (stock.flexyClaim2 || 0) - totalAllocatedCash + totalApprovedRemittance;
+  const closingSim = stock.openingSim + stock.sim - totalAllocatedSim;
+
+  return {
+    closingAmount,
+    closingSim
+  };
+}
+
 // 2. DAILY STOCK ENDPOINTS (Manager or Admin Only)
 
 // GET /api/stock
 app.get('/api/stock', authenticateToken, requireRole(['Manager', 'Admin']), (req, res) => {
   const db = loadDatabase();
-  const sortedStocks = [...db.dailyStocks].sort((a, b) => b.date.localeCompare(a.date));
+  const computedStocks = db.dailyStocks.map(s => {
+    const { closingAmount, closingSim } = computeStockClosing(s, db);
+    return {
+      ...s,
+      closingAmount,
+      closingSim
+    };
+  });
+  const sortedStocks = computedStocks.sort((a, b) => b.date.localeCompare(a.date));
   res.json({ success: true, dailyStocks: sortedStocks });
 });
 
@@ -665,7 +693,15 @@ app.get('/api/stock/:id', authenticateToken, requireRole(['Manager', 'Admin']), 
   if (!stock) {
     return res.status(404).json({ success: false, error: 'Stock entry not found' });
   }
-  res.json({ success: true, dailyStock: stock });
+  const { closingAmount, closingSim } = computeStockClosing(stock, db);
+  res.json({ 
+    success: true, 
+    dailyStock: {
+      ...stock,
+      closingAmount,
+      closingSim
+    } 
+  });
 });
 
 // GET /api/stock/date/:date
@@ -675,7 +711,15 @@ app.get('/api/stock/date/:date', authenticateToken, requireRole(['Manager', 'Adm
   if (!stock) {
     return res.status(404).json({ success: false, error: 'Stock entry not found for this date' });
   }
-  res.json({ success: true, dailyStock: stock });
+  const { closingAmount, closingSim } = computeStockClosing(stock, db);
+  res.json({ 
+    success: true, 
+    dailyStock: {
+      ...stock,
+      closingAmount,
+      closingSim
+    } 
+  });
 });
 
 // POST /api/stock
@@ -707,7 +751,8 @@ app.post('/api/stock', authenticateToken, requireRole(['Manager', 'Admin']), (re
   db.dailyStocks.push(newStock);
   saveDatabase(db);
   
-  res.status(201).json({ success: true, dailyStock: newStock });
+  const { closingAmount, closingSim } = computeStockClosing(newStock, db);
+  res.status(201).json({ success: true, dailyStock: { ...newStock, closingAmount, closingSim } });
 });
 
 // PUT /api/stock/:id
@@ -731,7 +776,8 @@ app.put('/api/stock/:id', authenticateToken, requireRole(['Manager', 'Admin']), 
   db.dailyStocks[idx] = current;
   saveDatabase(db);
   
-  res.json({ success: true, dailyStock: current });
+  const { closingAmount, closingSim } = computeStockClosing(current, db);
+  res.json({ success: true, dailyStock: { ...current, closingAmount, closingSim } });
 });
 
 // DELETE /api/stock/:id
