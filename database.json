@@ -39,6 +39,14 @@
       "role": "FSC",
       "passwordHash": "f85dd4fdb7daf13c598f30f523a666c7:47cbd5faaee4c5bfadfaae70221aa4ddc78ee6af282441fa3ab611def868a4ace83a9e5e1d6a8934b20cf24acba9171a1806ac211233c79a3ea3e25d5aa2b3b4",
       "createdAt": "2026-07-06T15:12:58.083Z"
+    },
+    {
+      "id": "user-fdb234fef18cd4e1",
+      "email": "manu@airtel.com",
+      "name": "Manu",
+      "role": "FSC",
+      "passwordHash": "e2967e04b3017c23480d848eb4881296:206cb43dcd57d33101cf3272aae75bceebae4692650568334dc860fda0d78b99505af57b67f9928c65dcb748e45e47e33f694b65c36eb0b35936d4c67b246adc",
+      "createdAt": "2026-07-06T15:53:10.535Z"
     }
   ],
   "dailyStocks": [
@@ -65,6 +73,18 @@
       "sim": 350,
       "createdAt": "2026-07-06T15:12:58.085Z",
       "createdBy": "user-manager-id"
+    },
+    {
+      "id": "stock-cec0f53bd511715c",
+      "date": "2026-07-07",
+      "openingAmount": 150000,
+      "openingSim": 500,
+      "flexy": 100000,
+      "flexyClaim1": 20000,
+      "flexyClaim2": 15000,
+      "sim": 350,
+      "createdAt": "2026-07-06T15:53:25.328Z",
+      "createdBy": "user-admin-id"
     }
   ],
   "allocations": [
@@ -182,15 +202,15 @@
       "openingSim": 35,
       "sim": 28,
       "closingSim": 7,
-      "status": "Pending",
+      "status": "Approved",
       "remarks": "Short of ₹500. Will settle tomorrow.",
-      "reviewNote": null,
+      "reviewNote": "Short of ₹500. Will settle tomorrow.",
       "createdAt": "2026-07-06T15:12:58.085Z",
       "submittedAt": "2026-07-06T15:12:58.085Z",
-      "reviewedAt": null,
+      "reviewedAt": "2026-07-06T15:53:56.928Z",
       "createdBy": "user-fsc-sita",
       "submittedBy": "user-fsc-sita",
-      "reviewedBy": null
+      "reviewedBy": "user-admin-id"
     }
   ]
 }
