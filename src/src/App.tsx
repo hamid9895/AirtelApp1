@@ -139,7 +139,7 @@ export default function App() {
 
   // Authentication Fields
   const [loginEmail, setLoginEmail] = useState<string>('manager@airtel.com');
-  const [loginPassword, setLoginPassword] = useState<string>('manager123');
+  const [loginPassword, setLoginPassword] = useState<string>('manager1234');
 
   // Navigation states
   const [activeTab, setActiveTab] = useState<'dashboard' | 'dailyStock' | 'allocations' | 'sales' | 'reports' | 'users'>('dashboard');

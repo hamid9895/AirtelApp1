@@ -108,7 +108,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
         </form>
 
         {/* Demo Accounts Helper block */}
-        <div className="mt-8 border-t border-slate-150 pt-6 text-center text-xs text-slate-400 leading-relaxed">
+        <div className="mt-8 d-none border-t border-slate-150 pt-6 text-center text-xs text-slate-400 leading-relaxed" style={{ display: 'none' }}>
           <p className="font-semibold text-slate-500 mb-2">Predefined Accounts for Testing & User Management:</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-left">
             <div className="bg-rose-50 border border-rose-100 p-2.5 rounded-xl">
