@@ -1,0 +1,6 @@
+{
+  "name": "Gemini AI Workspace",
+  "description": "A high-performance workspace powered by Gemini featuring intelligent chat with Google Search grounding, custom text summarization, professional code refactoring, and a prompt expansion studio.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
