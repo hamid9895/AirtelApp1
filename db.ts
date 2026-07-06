@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 import pg from 'pg';
-import sqlite3 from 'sqlite3';
 
 // Database Schema Interfaces (compatible with server.ts)
 export interface User {
@@ -81,7 +80,7 @@ export interface DatabaseSchema {
 }
 
 let pgPool: pg.Pool | null = null;
-let sqliteDb: sqlite3.Database | null = null;
+let sqliteDb: any = null;
 const usePostgres = !!process.env.DATABASE_URL;
 
 export function getDatabaseType(): 'PostgreSQL' | 'SQLite' {
@@ -151,6 +150,8 @@ export async function initializeDatabase(): Promise<void> {
     }
   } else {
     console.log('[Database] Connecting to SQLite local database (database.sqlite)...');
+    const sqlite3Module = await import('sqlite3');
+    const sqlite3 = sqlite3Module.default || sqlite3Module;
     sqliteDb = new sqlite3.Database('database.sqlite');
 
     try {

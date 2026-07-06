@@ -51,18 +51,6 @@
   ],
   "dailyStocks": [
     {
-      "id": "stock-yesterday",
-      "date": "2026-07-05",
-      "openingAmount": 140000,
-      "openingSim": 450,
-      "flexy": 95000,
-      "flexyClaim1": 18000,
-      "flexyClaim2": 12000,
-      "sim": 300,
-      "createdAt": "2026-07-06T15:12:58.085Z",
-      "createdBy": "user-manager-id"
-    },
-    {
       "id": "stock-today",
       "date": "2026-07-06",
       "openingAmount": 152805,
@@ -84,6 +72,18 @@
       "flexyClaim2": 15000,
       "sim": 350,
       "createdAt": "2026-07-06T15:53:25.328Z",
+      "createdBy": "user-admin-id"
+    },
+    {
+      "id": "stock-724d6204c0c4e483",
+      "date": "2026-07-08",
+      "openingAmount": 150000,
+      "openingSim": 500,
+      "flexy": 100000,
+      "flexyClaim1": 20000,
+      "flexyClaim2": 15000,
+      "sim": 350,
+      "createdAt": "2026-07-06T16:10:12.371Z",
       "createdBy": "user-admin-id"
     }
   ],
@@ -211,6 +211,35 @@
       "createdBy": "user-fsc-sita",
       "submittedBy": "user-fsc-sita",
       "reviewedBy": "user-admin-id"
+    },
+    {
+      "id": "sale-0b424b7fbe568d41",
+      "date": "2026-07-06",
+      "fscId": "user-fdb234fef18cd4e1",
+      "allocationId": null,
+      "openingBalance": 1000,
+      "autoRefill1": 0,
+      "autoRefill2": 0,
+      "autoRefill3": 0,
+      "ecManual1": 0,
+      "ecManual2": 0,
+      "closingBalance": 500,
+      "previousShort": 0,
+      "saleTotal": 500,
+      "saleAmount": 500,
+      "shortAmount": 0,
+      "openingSim": 0,
+      "sim": 0,
+      "closingSim": 0,
+      "status": "Pending",
+      "remarks": null,
+      "reviewNote": null,
+      "createdAt": "2026-07-06T16:16:52.194Z",
+      "submittedAt": "2026-07-06T16:16:59.433Z",
+      "reviewedAt": null,
+      "createdBy": "user-fdb234fef18cd4e1",
+      "submittedBy": "user-fdb234fef18cd4e1",
+      "reviewedBy": null
     }
   ]
 }
