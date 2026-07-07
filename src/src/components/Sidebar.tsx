@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { Layers, ClipboardList, TrendingUp, DollarSign, FileText, Users, LogOut, Settings2, Menu, X, HelpCircle, Shield, History } from 'lucide-react';
-import { UserDto } from '../types';
+import { UserDto, DbStatusDto } from '../types';
 
 interface SidebarProps {
   user: UserDto;
   activeTab: 'dashboard' | 'dailyStock' | 'allocations' | 'sales' | 'reports' | 'users' | 'masters-fsc' | 'masters-stock' | 'user-roles' | 'audit';
   setActiveTab: (tab: 'dashboard' | 'dailyStock' | 'allocations' | 'sales' | 'reports' | 'users' | 'masters-fsc' | 'masters-stock' | 'user-roles' | 'audit') => void;
   isStandaloneMode: boolean;
+  dbStatus?: DbStatusDto | null;
   onLogOut: () => void;
   allowedTabs: string[];
 }
@@ -16,6 +17,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeTab,
   setActiveTab,
   isStandaloneMode,
+  dbStatus,
   onLogOut,
   allowedTabs
 }) => {
@@ -120,16 +122,45 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Network status connection indicator */}
-        <div className="mt-4">
+        <div className="mt-4 space-y-2">
           {isStandaloneMode ? (
             <div className="bg-sky-50 text-sky-700 border border-sky-200/50 text-[9px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-xl flex items-center gap-1.5 w-fit">
               <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse"></span>
               Standalone (Local Mode)
             </div>
           ) : (
-            <div className="bg-emerald-50 text-emerald-700 border border-emerald-200/50 text-[9px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-xl flex items-center gap-1.5 w-fit">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-              Cloud Server Linked
+            <div className="flex flex-col gap-1.5">
+              <div className="bg-emerald-50 text-emerald-700 border border-emerald-200/50 text-[9px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-xl flex items-center gap-1.5 w-fit">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                Cloud Server Linked
+              </div>
+              
+              {/* Database status details */}
+              {dbStatus ? (
+                <div className="p-2.5 rounded-xl border bg-slate-50 border-slate-150 text-[10px] leading-relaxed">
+                  <div className="flex items-center gap-1.5 font-bold text-slate-700">
+                    <span className={`w-1.5 h-1.5 rounded-full ${dbStatus.connected ? 'bg-emerald-500' : 'bg-rose-500 animate-pulse'}`}></span>
+                    <span>Database: {dbStatus.type}</span>
+                    <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase ${dbStatus.connected ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                      {dbStatus.connected ? 'Online' : 'Offline'}
+                    </span>
+                  </div>
+                  {dbStatus.url && (
+                    <div className="mt-1 font-mono text-[8px] text-slate-500 break-all select-all leading-tight" title="Masked database connection">
+                      {dbStatus.url}
+                    </div>
+                  )}
+                  {dbStatus.error && (
+                    <div className="mt-1 text-[8px] font-semibold text-rose-600 bg-rose-50 p-1.5 rounded border border-rose-100/50 leading-normal break-words">
+                      Error: {dbStatus.error}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-[9px] text-slate-400 italic px-1">
+                  Checking database status...
+                </div>
+              )}
             </div>
           )}
         </div>

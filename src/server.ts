@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
-import { initializeDatabase, loadDataFromDb, syncDataToDb } from './db';
+import { initializeDatabase, loadDataFromDb, syncDataToDb, checkDatabaseConnection } from './db';
 
 dotenv.config();
 
@@ -351,8 +351,14 @@ function requireRole(roles: string[]) {
 // --- API ROUTES ---
 
 // GET /api/health
-app.get('/api/health', (req, res) => {
-  res.json({ success: true, status: 'ok', server: 'Express' });
+app.get('/api/health', async (req, res) => {
+  const dbStatus = await checkDatabaseConnection();
+  res.json({ 
+    success: true, 
+    status: 'ok', 
+    server: 'Express',
+    database: dbStatus
+  });
 });
 
 // 1. AUTHENTICATION & USERS

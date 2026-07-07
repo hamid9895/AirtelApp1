@@ -89,3 +89,10 @@ export interface ReportSummary {
   approvedCount: number;
   pendingCount: number;
 }
+
+export interface DbStatusDto {
+  connected: boolean;
+  type: 'PostgreSQL' | 'SQLite';
+  url?: string;
+  error?: string;
+}
