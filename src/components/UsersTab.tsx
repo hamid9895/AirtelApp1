@@ -50,8 +50,10 @@ export const UsersTab: React.FC<UsersTabProps> = ({
   token,
   onProfileUpdate
 }) => {
+  const apiFetch = (window as any).appFetch || window.fetch;
   // --- LOCAL NAVIGATION STATE ---
   const [viewMode, setViewMode] = useState<'list' | 'add' | 'edit'>('list');
+  const [selectedStaff, setSelectedStaff] = useState<UserDto | null>(null);
 
   // --- MY PROFILE STATE ---
   const [myPhoto, setMyPhoto] = useState<string | null>(user.photo || null);
@@ -100,7 +102,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
       handlePhotoReader(file, async (base64) => {
         setMyPhoto(base64);
         try {
-          const res = await fetch('/api/auth/profile', {
+          const res = await apiFetch('/api/auth/profile', {
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json',
@@ -291,6 +293,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
             columns={userColumns}
             searchPlaceholder="Search staff by name or email address..."
             searchKeys={['name', 'email', 'role']}
+            onView={setSelectedStaff}
             onEdit={user.role === 'Admin' ? handleEditTrigger : undefined}
             onDelete={user.role === 'Admin' ? (row) => onDeleteUser(row.id) : undefined}
             canDelete={(row) => row.id !== user.id} // Cannot delete yourself
@@ -440,6 +443,71 @@ export const UsersTab: React.FC<UsersTabProps> = ({
 
           </form>
 
+        </div>
+      )}
+
+      {/* 4. DETAIL VIEW MODAL */}
+      {selectedStaff && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in" id="staff-detail-modal">
+          <div className="bg-white rounded-3xl max-w-sm w-full overflow-hidden shadow-2xl border border-slate-100 flex flex-col">
+            {/* Header / Banner banner */}
+            <div className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-6 flex flex-col items-center relative">
+              <button 
+                onClick={() => setSelectedStaff(null)}
+                className="absolute top-4 right-4 text-white hover:bg-white/10 p-1.5 rounded-xl transition-all font-black text-xs"
+              >
+                ✕
+              </button>
+
+              {/* Profile Image avatar */}
+              {selectedStaff.photo ? (
+                <img 
+                  src={selectedStaff.photo} 
+                  alt={selectedStaff.name} 
+                  className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-lg mb-3"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-20 h-20 rounded-full bg-slate-700 text-slate-300 flex items-center justify-center border-4 border-white shadow-lg mb-3">
+                  <Users className="w-10 h-10" />
+                </div>
+              )}
+
+              <h3 className="text-base font-extrabold text-white text-center">{selectedStaff.name}</h3>
+              <p className="text-[10px] text-slate-300 font-extrabold uppercase mt-1 tracking-widest bg-white/10 px-2.5 py-0.5 rounded-full">{selectedStaff.role} Privilege</p>
+            </div>
+
+            {/* Profile Content Details */}
+            <div className="p-6 space-y-4">
+              <div className="space-y-3.5 text-xs">
+                <div className="flex justify-between items-center py-2 border-b border-slate-100">
+                  <span className="text-slate-400 font-bold uppercase text-[9px]">Airtel ID:</span>
+                  <span className="font-extrabold text-slate-800">{selectedStaff.id}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-slate-100">
+                  <span className="text-slate-400 font-bold uppercase text-[9px]">Email Address:</span>
+                  <span className="font-extrabold text-slate-800">{selectedStaff.email}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-slate-100">
+                  <span className="text-slate-400 font-bold uppercase text-[9px]">Status:</span>
+                  <span className="font-extrabold text-emerald-600 flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+                    Active System Access
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="bg-slate-50 p-4 flex justify-end border-t border-slate-100">
+              <button 
+                onClick={() => setSelectedStaff(null)}
+                className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-black px-5 py-2 rounded-xl transition-all cursor-pointer shadow"
+              >
+                Dismiss profile
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

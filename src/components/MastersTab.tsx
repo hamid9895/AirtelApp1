@@ -8,6 +8,7 @@ interface MastersTabProps {
 }
 
 export const MastersTab: React.FC<MastersTabProps> = ({ target, token }) => {
+  const apiFetch = (window as any).appFetch || window.fetch;
   const [configs, setConfigs] = useState<CustomFieldConfig[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -20,7 +21,7 @@ export const MastersTab: React.FC<MastersTabProps> = ({ target, token }) => {
   const fetchConfigs = async () => {
     setLoading(true);
     try {
-      const res = await window.fetch('/api/custom-fields', {
+      const res = await apiFetch('/api/custom-fields', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -53,7 +54,7 @@ export const MastersTab: React.FC<MastersTabProps> = ({ target, token }) => {
     setSuccess(null);
 
     try {
-      const res = await window.fetch('/api/custom-fields', {
+      const res = await apiFetch('/api/custom-fields', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -88,7 +89,7 @@ export const MastersTab: React.FC<MastersTabProps> = ({ target, token }) => {
     setSuccess(null);
 
     try {
-      const res = await window.fetch(`/api/custom-fields/${id}`, {
+      const res = await apiFetch(`/api/custom-fields/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`

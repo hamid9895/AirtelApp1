@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { History, Search, RefreshCw, AlertCircle, FileText, Download, Calendar } from 'lucide-react';
+import { History, Search, RefreshCw, AlertCircle, FileText, Download, Calendar, Eye } from 'lucide-react';
 
 interface AuditLogEntry {
   id: string;
@@ -18,9 +18,11 @@ interface AuditLogTabProps {
 }
 
 export const AuditLogTab: React.FC<AuditLogTabProps> = ({ token }) => {
+  const apiFetch = (window as any).appFetch || window.fetch;
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [selectedAuditLog, setSelectedAuditLog] = useState<AuditLogEntry | null>(null);
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -31,7 +33,7 @@ export const AuditLogTab: React.FC<AuditLogTabProps> = ({ token }) => {
     setLoading(true);
     setErrorMsg(null);
     try {
-      const res = await fetch('/api/audit-logs', {
+      const res = await apiFetch('/api/audit-logs', {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -248,6 +250,7 @@ export const AuditLogTab: React.FC<AuditLogTabProps> = ({ token }) => {
                   <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-wider text-center min-w-[100px]">Action</th>
                   <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-wider min-w-[120px]">Target Ledger</th>
                   <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-wider">Activity Details</th>
+                  <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-wider text-right w-24">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs font-bold text-slate-700">
@@ -279,8 +282,17 @@ export const AuditLogTab: React.FC<AuditLogTabProps> = ({ token }) => {
                     <td className="py-4 px-6 whitespace-nowrap">
                       <span className="text-slate-800 font-extrabold">{getTargetLabel(log.targetType)}</span>
                     </td>
-                    <td className="py-4 px-6 text-slate-600 font-medium leading-relaxed max-w-[400px] break-words">
+                    <td className="py-4 px-6 text-slate-600 font-medium leading-relaxed max-w-[300px] truncate block" title={log.details}>
                       {log.details}
+                    </td>
+                    <td className="py-4 px-6 text-right whitespace-nowrap">
+                      <button
+                        onClick={() => setSelectedAuditLog(log)}
+                        title="View Full Details"
+                        className="text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 p-1.5 rounded-lg transition-all inline-flex items-center cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -289,6 +301,71 @@ export const AuditLogTab: React.FC<AuditLogTabProps> = ({ token }) => {
           </div>
         </div>
       )}
+
+      {/* DETAIL MODAL popup */}
+      {selectedAuditLog && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in" id="audit-log-detail-modal">
+          <div className="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border border-slate-100 flex flex-col">
+            {/* Header */}
+            <div className="bg-slate-900 text-white p-6 flex justify-between items-start">
+              <div>
+                <span className="text-[9px] font-black uppercase tracking-widest bg-white/20 px-2 py-0.5 rounded">Security Ledger Log</span>
+                <h3 className="text-sm font-extrabold mt-1">Audit Entry: {selectedAuditLog.id}</h3>
+              </div>
+              <button 
+                onClick={() => setSelectedAuditLog(null)}
+                className="text-white hover:bg-white/10 p-1.5 rounded-xl transition-all font-black text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4">
+              <div className="space-y-3 text-xs">
+                <div className="flex justify-between py-1.5 border-b border-slate-100">
+                  <span className="text-slate-400 font-bold uppercase text-[9px]">Timestamp:</span>
+                  <span className="font-extrabold text-slate-800">{new Date(selectedAuditLog.timestamp).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between py-1.5 border-b border-slate-100">
+                  <span className="text-slate-400 font-bold uppercase text-[9px]">Operator:</span>
+                  <div className="text-right">
+                    <p className="font-extrabold text-slate-800">{selectedAuditLog.userName}</p>
+                    <p className="text-[10px] text-slate-400">{selectedAuditLog.userEmail} ({selectedAuditLog.userRole})</p>
+                  </div>
+                </div>
+                <div className="flex justify-between py-1.5 border-b border-slate-100">
+                  <span className="text-slate-400 font-bold uppercase text-[9px]">Action:</span>
+                  <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-extrabold border uppercase tracking-wider ${getActionStyles(selectedAuditLog.action)}`}>
+                    {selectedAuditLog.action}
+                  </span>
+                </div>
+                <div className="flex justify-between py-1.5 border-b border-slate-100">
+                  <span className="text-slate-400 font-bold uppercase text-[9px]">Target Ledger:</span>
+                  <span className="font-extrabold text-slate-800">{getTargetLabel(selectedAuditLog.targetType)}</span>
+                </div>
+                <div className="pt-2">
+                  <span className="text-slate-400 font-bold uppercase text-[9px] block mb-1">Details & Payload:</span>
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 font-semibold text-slate-700 leading-relaxed text-[11px] whitespace-pre-wrap">
+                    {selectedAuditLog.details}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="bg-slate-50 p-4 flex justify-end border-t border-slate-100">
+              <button 
+                onClick={() => setSelectedAuditLog(null)}
+                className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-black px-5 py-2 rounded-xl transition-all cursor-pointer shadow"
+              >
+                Close Audit details
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

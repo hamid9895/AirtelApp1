@@ -416,6 +416,8 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
     const tokenPayload = { id: user.id, email: user.email, name: user.name, role: user.role };
     const simulatedToken = btoa(JSON.stringify(tokenPayload));
 
+    logMockAudit(tokenPayload, 'LOGIN', 'auth', `User logged in successfully (Role: ${user.role})`);
+
     return mockResponse({
       success: true,
       token: simulatedToken,
@@ -1066,3 +1068,18 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
   // 404 FALLBACK
   return mockResponse({ success: false, error: `Mock API: Endpoint not found: ${cleanUrl}` }, 404);
 }
+
+export const appFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as any).url || '';
+  if (url.startsWith('/api')) {
+    try {
+      const response = await window.fetch(input, init);
+      return response;
+    } catch (err) {
+      console.warn(`[Airtel Distro Standalone] Server offline. Accessing local mock storage for: ${url}`, err);
+      return handleMockApiRequest(url, init);
+    }
+  }
+  return window.fetch(input, init);
+};
+

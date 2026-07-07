@@ -92,6 +92,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({
   // --- LOCAL NAVIGATION STATE ---
   // List-first separated screen
   const [viewMode, setViewMode] = useState<'list' | 'add' | 'edit'>('list');
+  const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
 
   // Sync component view mode with editing changes
   useEffect(() => {
@@ -392,6 +393,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({
             columns={saleColumns}
             searchPlaceholder="Search sheets by FSC name or date (YYYY-MM-DD)..."
             searchKeys={['fscName', 'date', 'status']}
+            onView={setSelectedSale}
             onEdit={(row) => row.status === 'Draft' ? handleEditTrigger(row) : undefined}
             canEdit={(row) => row.status === 'Draft'} // Only draft reports are editable
             exportFilename="airtel_daily_sales_ledger"
@@ -691,6 +693,122 @@ export const SalesTab: React.FC<SalesTabProps> = ({
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* 3. DETAIL VIEW MODAL */}
+      {selectedSale && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in" id="sales-detail-modal">
+          <div className="bg-white rounded-3xl max-w-xl w-full overflow-hidden shadow-2xl border border-slate-100 flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className={`p-6 flex justify-between items-start text-white ${
+              selectedSale.status === 'Approved' ? 'bg-gradient-to-r from-emerald-600 to-emerald-800' :
+              selectedSale.status === 'Pending' ? 'bg-gradient-to-r from-amber-500 to-amber-700' :
+              selectedSale.status === 'Rejected' ? 'bg-gradient-to-r from-rose-600 to-rose-800' :
+              'bg-gradient-to-r from-slate-600 to-slate-800'
+            }`}>
+              <div>
+                <span className="text-[9px] font-black uppercase tracking-widest bg-white/20 px-2 py-0.5 rounded">FSC Daily Sales Sheet</span>
+                <h3 className="text-lg font-extrabold mt-1">{allUsers.find(u => u.id === selectedSale.fscId)?.name || selectedSale.fscName || 'FSC Coordinator'}</h3>
+                <p className="text-[10px] text-white/90 font-bold tracking-wider mt-0.5">Date: {selectedSale.date} | Status: {selectedSale.status.toUpperCase()}</p>
+              </div>
+              <button 
+                onClick={() => setSelectedSale(null)}
+                className="text-white hover:bg-white/10 p-2 rounded-xl transition-all font-black text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-6 overflow-y-auto">
+              
+              {/* Financial Summary Cards */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 text-center">
+                  <span className="text-[8px] font-extrabold uppercase text-slate-400 block">Credit Sales</span>
+                  <span className="text-sm font-black text-slate-800">₹{(selectedSale.saleTotal || 0).toLocaleString('en-IN')}</span>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 text-center">
+                  <span className="text-[8px] font-extrabold uppercase text-slate-400 block">Remitted Cash</span>
+                  <span className="text-sm font-black text-emerald-600">₹{(selectedSale.saleAmount || 0).toLocaleString('en-IN')}</span>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 text-center">
+                  <span className="text-[8px] font-extrabold uppercase text-slate-400 block">Shortage</span>
+                  <span className={`text-sm font-black ${selectedSale.shortAmount > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                    ₹{(selectedSale.shortAmount || 0).toLocaleString('en-IN')}
+                  </span>
+                </div>
+              </div>
+
+              {/* Grid Breakdown */}
+              <div className="border-t border-b border-slate-100 py-4 grid grid-cols-2 gap-x-6 gap-y-4 text-xs">
+                <div>
+                  <span className="text-[9px] font-extrabold text-slate-400 uppercase">Opening Balance</span>
+                  <p className="font-extrabold text-slate-800">₹{(selectedSale.openingBalance || 0).toLocaleString('en-IN')}</p>
+                </div>
+                <div>
+                  <span className="text-[9px] font-extrabold text-slate-400 uppercase">Closing Balance</span>
+                  <p className="font-extrabold text-slate-800">₹{(selectedSale.closingBalance || 0).toLocaleString('en-IN')}</p>
+                </div>
+                <div>
+                  <span className="text-[9px] font-extrabold text-slate-400 uppercase">Allocated Refills (R1+R2+R3)</span>
+                  <p className="font-semibold text-slate-700">₹{((selectedSale.autoRefill1 || 0) + (selectedSale.autoRefill2 || 0) + (selectedSale.autoRefill3 || 0)).toLocaleString('en-IN')}</p>
+                </div>
+                <div>
+                  <span className="text-[9px] font-extrabold text-slate-400 uppercase">Manual EasyCharge (1+2)</span>
+                  <p className="font-semibold text-slate-700">₹{((selectedSale.ecManual1 || 0) + (selectedSale.ecManual2 || 0)).toLocaleString('en-IN')}</p>
+                </div>
+                <div>
+                  <span className="text-[9px] font-extrabold text-slate-400 uppercase">Previous Unsettled Shortages</span>
+                  <p className="font-semibold text-slate-700">₹{(selectedSale.previousShort || 0).toLocaleString('en-IN')}</p>
+                </div>
+                <div>
+                  <span className="text-[9px] font-extrabold text-slate-400 uppercase">SIM Cards (Op / Sold / Cl)</span>
+                  <p className="font-semibold text-slate-700">Op: {selectedSale.openingSim || 0} | Sold: {selectedSale.sim || 0} | Cl: {selectedSale.closingSim || 0}</p>
+                </div>
+              </div>
+
+              {/* Remarks Box */}
+              <div className="space-y-3">
+                {selectedSale.remarks && (
+                  <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Coordinator Remarks</span>
+                    <p className="text-xs text-slate-700 italic">"{selectedSale.remarks}"</p>
+                  </div>
+                )}
+                
+                {selectedSale.reviewNote && (
+                  <div className="bg-amber-50/50 border border-amber-100 p-3 rounded-2xl">
+                    <span className="text-[9px] font-black text-amber-800 uppercase tracking-widest block mb-1">Reviewer Note / Settlement logs</span>
+                    <p className="text-xs text-slate-750 font-bold italic">"{selectedSale.reviewNote}"</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Workflow Logs */}
+              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100 text-[10px] text-slate-400 font-bold space-y-1.5 uppercase">
+                <div>CREATED BY: <span className="text-slate-600 font-extrabold">{allUsers.find(u => u.id === selectedSale.createdBy)?.name || selectedSale.createdBy || 'SYSTEM'}</span> ({new Date(selectedSale.createdAt).toLocaleString()})</div>
+                {selectedSale.submittedBy && (
+                  <div>SUBMITTED BY: <span className="text-slate-600 font-extrabold">{allUsers.find(u => u.id === selectedSale.submittedBy)?.name || selectedSale.submittedBy}</span> {selectedSale.submittedAt && `(${new Date(selectedSale.submittedAt).toLocaleString()})`}</div>
+                )}
+                {selectedSale.reviewedBy && (
+                  <div>REVIEWED BY: <span className="text-slate-600 font-extrabold">{allUsers.find(u => u.id === selectedSale.reviewedBy)?.name || selectedSale.reviewedBy}</span> {selectedSale.reviewedAt && `(${new Date(selectedSale.reviewedAt).toLocaleString()})`}</div>
+                )}
+              </div>
+
+            </div>
+
+            {/* Footer action */}
+            <div className="bg-slate-50 p-4 flex justify-end border-t border-slate-100">
+              <button 
+                onClick={() => setSelectedSale(null)}
+                className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-black px-6 py-2.5 rounded-xl transition-all cursor-pointer shadow"
+              >
+                Close details
+              </button>
+            </div>
           </div>
         </div>
       )}

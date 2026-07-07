@@ -1,28 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { handleMockApiRequest, initializeMockDatabase } from './mockApi';
+import { handleMockApiRequest, initializeMockDatabase, appFetch } from './mockApi';
 
 // Register global appFetch fallback for standalone hosting
 // (Enables static deployments like Vercel, Netlify, or GitHub Pages when backend is offline)
 initializeMockDatabase();
 
-const originalFetch = window.fetch;
-
-const appFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-  const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as Request).url;
-  if (url.startsWith('/api')) {
-    try {
-      const response = await originalFetch(input, init);
-      return response;
-    } catch (err) {
-      console.warn(`[Airtel Distro Standalone] Server offline. Accessing local mock storage for: ${url}`, err);
-      return handleMockApiRequest(url, init);
-    }
-  }
-  return originalFetch(input, init);
-};
-
-window.fetch = appFetch;
+// Define a local fetch binding that uses appFetch
 const fetch = appFetch;
+
+// Safely try to expose it to window just in case, but do not fail if window.fetch is a getter-only property
+try {
+  (window as any).appFetch = appFetch;
+} catch (e) {
+  console.warn('[Airtel Distro] Could not assign appFetch to window.', e);
+}
+
 
 
 // Import custom icons and loaders

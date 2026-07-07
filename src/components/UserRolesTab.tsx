@@ -27,6 +27,7 @@ const AVAILABLE_TABS = [
 const ROLES_LIST: ('Admin' | 'Manager' | 'Approver' | 'FSC')[] = ['Admin', 'Manager', 'Approver', 'FSC'];
 
 export const UserRolesTab: React.FC<UserRolesTabProps> = ({ token, onPermissionsUpdated }) => {
+  const apiFetch = (window as any).appFetch || window.fetch;
   const [permissions, setPermissions] = useState<RolePermission[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -37,7 +38,7 @@ export const UserRolesTab: React.FC<UserRolesTabProps> = ({ token, onPermissions
     setLoading(true);
     setErrorMsg(null);
     try {
-      const res = await fetch('/api/role-permissions', {
+      const res = await apiFetch('/api/role-permissions', {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -101,7 +102,7 @@ export const UserRolesTab: React.FC<UserRolesTabProps> = ({ token, onPermissions
     setErrorMsg(null);
     setSuccessMsg(null);
     try {
-      const res = await fetch('/api/role-permissions', {
+      const res = await apiFetch('/api/role-permissions', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

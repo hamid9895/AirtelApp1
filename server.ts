@@ -107,7 +107,7 @@ interface AuditLogEntry {
   userName: string;
   userRole: string;
   action: string;
-  targetType: 'dailyStock' | 'allocation' | 'sale' | 'customField' | 'rolePermission';
+  targetType: 'dailyStock' | 'allocation' | 'sale' | 'customField' | 'rolePermission' | 'user' | 'auth';
   details: string;
 }
 
@@ -463,7 +463,7 @@ function saveDatabase(db: DatabaseSchema) {
     .catch(err => console.error('[Database] Failed to sync memory state to Relational Database:', err));
 }
 
-function logAudit(db: DatabaseSchema, user: any, action: string, targetType: 'dailyStock' | 'allocation' | 'sale' | 'customField' | 'rolePermission', details: string) {
+function logAudit(db: DatabaseSchema, user: any, action: string, targetType: 'dailyStock' | 'allocation' | 'sale' | 'customField' | 'rolePermission' | 'user' | 'auth', details: string) {
   if (!db.auditLogs) {
     db.auditLogs = [];
   }
@@ -532,6 +532,10 @@ app.post('/api/auth/login', (req, res) => {
   }
   
   const token = signToken({ id: user.id, email: user.email, name: user.name, role: user.role });
+  
+  logAudit(db, { id: user.id, email: user.email, name: user.name, role: user.role }, 'LOGIN', 'auth', `User logged in successfully (Role: ${user.role})`);
+  saveDatabase(db);
+
   res.json({
     success: true,
     token,

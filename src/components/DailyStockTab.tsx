@@ -56,6 +56,7 @@ export const DailyStockTab: React.FC<DailyStockTabProps> = ({
   // --- LOCAL NAVIGATION STATE ---
   const [viewMode, setViewMode] = useState<'list' | 'add' | 'edit'>('list');
   const [localCustomFields, setLocalCustomFields] = useState<Record<string, string | number>>({});
+  const [selectedStock, setSelectedStock] = useState<DailyStock | null>(null);
 
   // Sync component view mode if central editing states change
   useEffect(() => {
@@ -199,6 +200,7 @@ export const DailyStockTab: React.FC<DailyStockTabProps> = ({
             columns={stockColumns}
             searchPlaceholder="Filter records by date (YYYY-MM-DD)..."
             searchKeys={['date']}
+            onView={setSelectedStock}
             onEdit={handleEditTrigger}
             onDelete={(row) => onDeleteStock(row.id)}
             exportFilename="airtel_inventory_log"
@@ -372,6 +374,114 @@ export const DailyStockTab: React.FC<DailyStockTabProps> = ({
 
           </form>
 
+        </div>
+      )}
+
+      {/* 3. DETAIL VIEW MODAL */}
+      {selectedStock && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in" id="daily-stock-detail-modal">
+          <div className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-100 flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-[#EE1D23] to-[#C41217] text-white p-6 flex justify-between items-start">
+              <div>
+                <span className="text-[9px] font-black uppercase tracking-widest bg-white/20 px-2 py-0.5 rounded">Daily Stock Log</span>
+                <h3 className="text-lg font-extrabold mt-1">Date: {selectedStock.date}</h3>
+                <p className="text-[10px] text-red-100 font-bold tracking-wider mt-0.5">ID: {selectedStock.id}</p>
+              </div>
+              <button 
+                onClick={() => setSelectedStock(null)}
+                className="text-white hover:bg-white/10 p-2 rounded-xl transition-all font-black text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-5 overflow-y-auto">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100/75">
+                  <span className="text-[9px] font-extrabold uppercase text-slate-400">Opening cash</span>
+                  <p className="text-sm font-extrabold text-slate-800">₹{selectedStock.openingAmount.toLocaleString('en-IN')}</p>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100/75">
+                  <span className="text-[9px] font-extrabold uppercase text-slate-400">Opening SIM count</span>
+                  <p className="text-sm font-extrabold text-slate-800">{selectedStock.openingSim} SIMs</p>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100/75">
+                  <span className="text-[9px] font-extrabold uppercase text-slate-400">Flexy Airtime</span>
+                  <p className="text-sm font-extrabold text-slate-800">₹{selectedStock.flexy.toLocaleString('en-IN')}</p>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100/75">
+                  <span className="text-[9px] font-extrabold uppercase text-slate-400">SIM cards added</span>
+                  <p className="text-sm font-extrabold text-slate-800">+{selectedStock.sim} SIMs</p>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100/75">
+                  <span className="text-[9px] font-extrabold uppercase text-slate-400">Claim Batch 1</span>
+                  <p className="text-sm font-semibold text-slate-800">₹{selectedStock.flexyClaim1.toLocaleString('en-IN')}</p>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100/75">
+                  <span className="text-[9px] font-extrabold uppercase text-slate-400">Claim Batch 2</span>
+                  <p className="text-sm font-semibold text-slate-800">₹{selectedStock.flexyClaim2.toLocaleString('en-IN')}</p>
+                </div>
+              </div>
+
+              {/* Dynamic calculations */}
+              <div className="border-t border-b border-slate-100 py-3 grid grid-cols-2 gap-4">
+                <div>
+                  <span className="text-[9px] font-extrabold uppercase text-slate-400 block mb-0.5">Calculated Closing Cash</span>
+                  <span className="text-base font-black text-emerald-600">
+                    ₹{((selectedStock as any).closingAmount !== undefined ? (selectedStock as any).closingAmount : selectedStock.openingAmount).toLocaleString('en-IN')}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[9px] font-extrabold uppercase text-slate-400 block mb-0.5">Calculated Closing SIMs</span>
+                  <span className="text-base font-black text-blue-600">
+                    {((selectedStock as any).closingSim !== undefined ? (selectedStock as any).closingSim : selectedStock.openingSim)} SIMs
+                  </span>
+                </div>
+              </div>
+
+              {/* Custom fields */}
+              {activeStockConfigs.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-1">Custom Extension Fields</h4>
+                  <div className="grid grid-cols-1 gap-2">
+                    {activeStockConfigs.map(c => {
+                      const val = selectedStock.customFields?.[c.id];
+                      return (
+                        <div key={c.id} className="flex justify-between items-center text-xs py-1.5 border-b border-slate-50 last:border-0">
+                          <span className="text-slate-500 font-bold">{c.name}:</span>
+                          <span className="font-extrabold text-slate-800">
+                            {val !== undefined && val !== null && val !== '' ? (
+                              c.type === 'number' ? Number(val).toLocaleString() : String(val)
+                            ) : (
+                              <span className="text-slate-300 font-medium">-</span>
+                            )}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Meta logs */}
+              <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100/70 text-[10px] text-slate-400 font-bold space-y-1">
+                <div>CREATED BY: <span className="text-slate-600 uppercase">{selectedStock.createdBy || 'SYSTEM'}</span></div>
+                <div>CREATED AT: <span className="text-slate-600">{new Date(selectedStock.createdAt).toLocaleString()}</span></div>
+              </div>
+            </div>
+
+            {/* Footer action */}
+            <div className="bg-slate-50 p-4 flex justify-end border-t border-slate-100">
+              <button 
+                onClick={() => setSelectedStock(null)}
+                className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-black px-6 py-2.5 rounded-xl transition-all cursor-pointer shadow"
+              >
+                Close details
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

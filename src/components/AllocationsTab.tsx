@@ -74,6 +74,7 @@ export const AllocationsTab: React.FC<AllocationsTabProps> = ({
   const [viewMode, setViewMode] = useState<'list' | 'add' | 'edit'>('list');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [localCustomFields, setLocalCustomFields] = useState<Record<string, string | number>>({});
+  const [selectedAllocation, setSelectedAllocation] = useState<Allocation | null>(null);
 
   // --- SEPARATED CALCULATIONS & CONTROLLERS ---
 
@@ -243,6 +244,7 @@ export const AllocationsTab: React.FC<AllocationsTabProps> = ({
             columns={allocationColumns}
             searchPlaceholder="Search recipient or date (YYYY-MM-DD)..."
             searchKeys={['fscName', 'date']}
+            onView={setSelectedAllocation}
             onEdit={handleEditTrigger}
             onDelete={(row) => onDeleteAllocation(row.id)}
             exportFilename="airtel_fsc_allocations_ledger"
@@ -626,6 +628,127 @@ export const AllocationsTab: React.FC<AllocationsTabProps> = ({
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* 3. DETAIL VIEW MODAL */}
+      {selectedAllocation && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in" id="allocation-detail-modal">
+          <div className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-100 flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-indigo-600 to-indigo-800 text-white p-6 flex justify-between items-start">
+              <div>
+                <span className="text-[9px] font-black uppercase tracking-widest bg-white/20 px-2 py-0.5 rounded">FSC Agent Distribution</span>
+                <h3 className="text-lg font-extrabold mt-1">{selectedAllocation.fscName || 'Field Agent'}</h3>
+                <p className="text-[10px] text-indigo-100 font-bold tracking-wider mt-0.5">Date: {selectedAllocation.date} | ID: {selectedAllocation.id}</p>
+              </div>
+              <button 
+                onClick={() => setSelectedAllocation(null)}
+                className="text-white hover:bg-white/10 p-2 rounded-xl transition-all font-black text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-5 overflow-y-auto">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100/75">
+                  <span className="text-[9px] font-extrabold uppercase text-slate-400">Opening Cash Balance</span>
+                  <p className="text-sm font-extrabold text-slate-800">₹{selectedAllocation.openingBalance.toLocaleString('en-IN')}</p>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100/75">
+                  <span className="text-[9px] font-extrabold uppercase text-slate-400">Opening SIM Balance</span>
+                  <p className="text-sm font-extrabold text-slate-800">{selectedAllocation.openingSim} SIMs</p>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100/75 col-span-2">
+                  <span className="text-[9px] font-extrabold uppercase text-slate-400 block mb-2">Refill & EasyCharge breakdown</span>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div className="bg-white p-2 rounded-xl border border-slate-100 text-center">
+                      <span className="text-[8px] font-extrabold uppercase text-slate-400 block">Auto 1</span>
+                      <span className="font-extrabold text-slate-800">₹{(selectedAllocation.autoRefill1 || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="bg-white p-2 rounded-xl border border-slate-100 text-center">
+                      <span className="text-[8px] font-extrabold uppercase text-slate-400 block">Auto 2</span>
+                      <span className="font-extrabold text-slate-800">₹{(selectedAllocation.autoRefill2 || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="bg-white p-2 rounded-xl border border-slate-100 text-center">
+                      <span className="text-[8px] font-extrabold uppercase text-slate-400 block">Auto 3</span>
+                      <span className="font-extrabold text-slate-800">₹{(selectedAllocation.autoRefill3 || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="bg-white p-2 rounded-xl border border-slate-100 text-center">
+                      <span className="text-[8px] font-extrabold uppercase text-slate-400 block">Manual 1</span>
+                      <span className="font-extrabold text-slate-800">₹{(selectedAllocation.ecManual1 || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="bg-white p-2 rounded-xl border border-slate-100 text-center">
+                      <span className="text-[8px] font-extrabold uppercase text-slate-400 block">Manual 2</span>
+                      <span className="font-extrabold text-slate-800">₹{(selectedAllocation.ecManual2 || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Dynamic calculations */}
+              <div className="border-t border-b border-slate-100 py-3 grid grid-cols-2 gap-4">
+                <div>
+                  <span className="text-[9px] font-extrabold uppercase text-slate-400 block mb-0.5">Total Distributed cash</span>
+                  <span className="text-base font-black text-[#EE1D23]">
+                    ₹{selectedAllocation.totalAllocated.toLocaleString('en-IN')}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[9px] font-extrabold uppercase text-slate-400 block mb-0.5">SIM Cards Distributed</span>
+                  <span className="text-base font-black text-indigo-600">
+                    {selectedAllocation.sim} SIMs
+                  </span>
+                </div>
+                <div className="col-span-2 bg-indigo-50/50 px-4 py-2.5 rounded-2xl border border-indigo-100/50 flex justify-between items-center text-xs">
+                  <span className="font-bold text-indigo-800">Total Pooled Cash Value:</span>
+                  <span className="font-black text-indigo-900 text-sm">₹{(selectedAllocation.openingBalance + selectedAllocation.totalAllocated).toLocaleString('en-IN')}</span>
+                </div>
+              </div>
+
+              {/* Custom fields */}
+              {activeFscConfigs.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-1">Custom Extension Fields</h4>
+                  <div className="grid grid-cols-1 gap-2">
+                    {activeFscConfigs.map(c => {
+                      const val = selectedAllocation.customFields?.[c.id];
+                      return (
+                        <div key={c.id} className="flex justify-between items-center text-xs py-1.5 border-b border-slate-50 last:border-0">
+                          <span className="text-slate-500 font-bold">{c.name}:</span>
+                          <span className="font-extrabold text-slate-800">
+                            {val !== undefined && val !== null && val !== '' ? (
+                              c.type === 'number' ? Number(val).toLocaleString() : String(val)
+                            ) : (
+                              <span className="text-slate-300 font-medium">-</span>
+                            )}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Meta logs */}
+              <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100/70 text-[10px] text-slate-400 font-bold space-y-1">
+                <div>CREATED BY: <span className="text-slate-600 uppercase">{selectedAllocation.createdBy || 'SYSTEM'}</span></div>
+                <div>CREATED AT: <span className="text-slate-600">{new Date(selectedAllocation.createdAt).toLocaleString()}</span></div>
+              </div>
+            </div>
+
+            {/* Footer action */}
+            <div className="bg-slate-50 p-4 flex justify-end border-t border-slate-100">
+              <button 
+                onClick={() => setSelectedAllocation(null)}
+                className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-black px-6 py-2.5 rounded-xl transition-all cursor-pointer shadow"
+              >
+                Close details
+              </button>
+            </div>
           </div>
         </div>
       )}

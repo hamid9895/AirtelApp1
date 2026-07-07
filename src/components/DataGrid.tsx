@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { ChevronUp, ChevronDown, Search, Download, ChevronLeft, ChevronRight, Edit2, Trash2 } from 'lucide-react';
+import { ChevronUp, ChevronDown, Search, Download, ChevronLeft, ChevronRight, Edit2, Trash2, Eye } from 'lucide-react';
 
 /**
  * Interface representing a column definition in the DataGrid.
@@ -20,6 +20,7 @@ interface DataGridProps<T> {
   columns: GridColumn<T>[];                             // Column schemas
   searchPlaceholder?: string;                           // Placeholder text for global search input
   searchKeys?: (keyof T | string)[];                    // Specific keys to scan during full-text search
+  onView?: (row: T) => void;                            // Optional view details handler
   onEdit?: (row: T) => void;                            // Optional edit handler
   onDelete?: (row: T) => void;                          // Optional delete handler
   canEdit?: (row: T) => boolean;                        // Callback to check if editing is permitted for a row
@@ -33,6 +34,7 @@ export function DataGrid<T extends { id?: string | number; [key: string]: any }>
   columns,
   searchPlaceholder = 'Search records...',
   searchKeys,
+  onView,
   onEdit,
   onDelete,
   canEdit,
@@ -248,8 +250,8 @@ export function DataGrid<T extends { id?: string | number; [key: string]: any }>
                   </div>
                 </th>
               ))}
-              {(onEdit || onDelete) && (
-                <th className="p-3.5 text-right font-black w-24">{actionsLabel}</th>
+              {(onView || onEdit || onDelete) && (
+                <th className="p-3.5 text-right font-black w-28">{actionsLabel}</th>
               )}
             </tr>
           </thead>
@@ -281,8 +283,17 @@ export function DataGrid<T extends { id?: string | number; [key: string]: any }>
                       </td>
                     );
                   })}
-                  {(onEdit || onDelete) && (
+                  {(onView || onEdit || onDelete) && (
                     <td className="p-3.5 text-right space-x-1 whitespace-nowrap">
+                      {onView && (
+                        <button
+                          onClick={() => onView(row)}
+                          title="View Details"
+                          className="text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 p-1.5 rounded-lg transition-all inline-flex items-center cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       {onEdit && (!canEdit || canEdit(row)) && (
                         <button
                           onClick={() => onEdit(row)}
@@ -310,7 +321,7 @@ export function DataGrid<T extends { id?: string | number; [key: string]: any }>
             {/* Empty Fallback */}
             {totalItems === 0 && (
               <tr>
-                <td colSpan={columns.length + (onEdit || onDelete ? 1 : 0)} className="p-10 text-center">
+                <td colSpan={columns.length + (onView || onEdit || onDelete ? 1 : 0)} className="p-10 text-center">
                   <div className="flex flex-col items-center justify-center gap-2">
                     <span className="text-sm font-bold text-slate-800">No matching records found</span>
                     <span className="text-xs text-slate-400">Try adjusting your search filters or add a new entry.</span>
