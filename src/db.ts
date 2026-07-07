@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 import pg from 'pg';
-import sqlite3 from 'sqlite3';
 
 // Database Schema Interfaces (compatible with server.ts)
 export interface User {
@@ -11,6 +10,14 @@ export interface User {
   role: 'Admin' | 'Manager' | 'Approver' | 'FSC';
   passwordHash: string;
   createdAt: string;
+  photo?: string | null;
+}
+
+export interface CustomFieldConfig {
+  id: string;
+  name: string;
+  type: 'text' | 'number' | 'date';
+  target: 'fsc' | 'stock';
 }
 
 export interface DailyStock {
@@ -24,6 +31,7 @@ export interface DailyStock {
   sim: number;
   createdAt: string;
   createdBy: string | null;
+  customFields?: Record<string, string | number>;
 }
 
 export interface Allocation {
@@ -41,6 +49,7 @@ export interface Allocation {
   totalAllocated: number;
   createdAt: string;
   createdBy: string | null;
+  customFields?: Record<string, string | number>;
 }
 
 export interface Sale {
@@ -78,10 +87,11 @@ export interface DatabaseSchema {
   dailyStocks: DailyStock[];
   allocations: Allocation[];
   sales: Sale[];
+  customFieldConfigs: CustomFieldConfig[];
 }
 
 let pgPool: pg.Pool | null = null;
-let sqliteDb: sqlite3.Database | null = null;
+let sqliteDb: any = null;
 const usePostgres = !!process.env.DATABASE_URL;
 
 export function getDatabaseType(): 'PostgreSQL' | 'SQLite' {
@@ -130,11 +140,19 @@ export async function initializeDatabase(): Promise<void> {
 
   if (usePostgres) {
     console.log('[Database] Connecting to PostgreSQL database...');
+    const useSsl = process.env.NODE_ENV === 'production' || 
+                   process.env.DATABASE_URL?.includes('render.com') || 
+                   process.env.DATABASE_URL?.includes('supabase.co') ||
+                   process.env.DATABASE_URL?.includes('supabase.net') ||
+                   process.env.PGSSLMODE === 'require' ||
+                   process.env.PGSSLMODE === 'no-verify';
+    
     pgPool = new pg.Pool({
       connectionString: process.env.DATABASE_URL,
       max: 10,
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
+      connectionTimeoutMillis: 5000, // Slightly longer timeout for remote db connection
+      ssl: useSsl ? { rejectUnauthorized: false } : false,
     });
 
     // Run migrations
@@ -151,6 +169,8 @@ export async function initializeDatabase(): Promise<void> {
     }
   } else {
     console.log('[Database] Connecting to SQLite local database (database.sqlite)...');
+    const sqlite3Module = await import('sqlite3');
+    const sqlite3 = sqlite3Module.default || sqlite3Module;
     sqliteDb = new sqlite3.Database('database.sqlite');
 
     try {
@@ -176,6 +196,7 @@ export async function loadDataFromDb(): Promise<DatabaseSchema | null> {
       const dRes = await pgPool.query('SELECT * FROM daily_stocks');
       const aRes = await pgPool.query('SELECT * FROM allocations');
       const sRes = await pgPool.query('SELECT * FROM sales');
+      const cRes = await pgPool.query('SELECT * FROM custom_field_configs').catch(() => ({ rows: [], rowCount: 0 }));
 
       if (uRes.rowCount === 0) {
         return null; // Signals database is empty, caller should seed it
@@ -188,6 +209,7 @@ export async function loadDataFromDb(): Promise<DatabaseSchema | null> {
         role: row.role as any,
         passwordHash: row.password_hash,
         createdAt: row.created_at,
+        photo: row.photo || null,
       }));
 
       const dailyStocks: DailyStock[] = dRes.rows.map(row => ({
@@ -201,6 +223,7 @@ export async function loadDataFromDb(): Promise<DatabaseSchema | null> {
         sim: Number(row.sim),
         createdAt: row.created_at,
         createdBy: row.created_by,
+        customFields: row.custom_fields ? JSON.parse(row.custom_fields) : {},
       }));
 
       const allocations: Allocation[] = aRes.rows.map(row => ({
@@ -218,6 +241,7 @@ export async function loadDataFromDb(): Promise<DatabaseSchema | null> {
         totalAllocated: Number(row.total_allocated),
         createdAt: row.created_at,
         createdBy: row.created_by,
+        customFields: row.custom_fields ? JSON.parse(row.custom_fields) : {},
       }));
 
       const sales: Sale[] = sRes.rows.map(row => ({
@@ -250,7 +274,14 @@ export async function loadDataFromDb(): Promise<DatabaseSchema | null> {
         reviewedBy: row.reviewed_by,
       }));
 
-      return { users, dailyStocks, allocations, sales };
+      const customFieldConfigs: CustomFieldConfig[] = cRes.rows.map(row => ({
+        id: row.id,
+        name: row.name,
+        type: row.type as any,
+        target: row.target as any,
+      }));
+
+      return { users, dailyStocks, allocations, sales, customFieldConfigs };
     } else {
       if (!sqliteDb) return null;
 
@@ -258,6 +289,7 @@ export async function loadDataFromDb(): Promise<DatabaseSchema | null> {
       const dRows = await sqliteAll('SELECT * FROM daily_stocks');
       const aRows = await sqliteAll('SELECT * FROM allocations');
       const sRows = await sqliteAll('SELECT * FROM sales');
+      const cRows = await sqliteAll('SELECT * FROM custom_field_configs').catch(() => []);
 
       if (uRows.length === 0) {
         return null; // Empty SQLite, caller should seed it
@@ -270,6 +302,7 @@ export async function loadDataFromDb(): Promise<DatabaseSchema | null> {
         role: row.role as any,
         passwordHash: row.password_hash,
         createdAt: row.created_at,
+        photo: row.photo || null,
       }));
 
       const dailyStocks: DailyStock[] = dRows.map(row => ({
@@ -283,6 +316,7 @@ export async function loadDataFromDb(): Promise<DatabaseSchema | null> {
         sim: Number(row.sim),
         createdAt: row.created_at,
         createdBy: row.created_by,
+        customFields: row.custom_fields ? JSON.parse(row.custom_fields) : {},
       }));
 
       const allocations: Allocation[] = aRows.map(row => ({
@@ -300,6 +334,7 @@ export async function loadDataFromDb(): Promise<DatabaseSchema | null> {
         totalAllocated: Number(row.total_allocated),
         createdAt: row.created_at,
         createdBy: row.created_by,
+        customFields: row.custom_fields ? JSON.parse(row.custom_fields) : {},
       }));
 
       const sales: Sale[] = sRows.map(row => ({
@@ -332,7 +367,14 @@ export async function loadDataFromDb(): Promise<DatabaseSchema | null> {
         reviewedBy: row.reviewed_by,
       }));
 
-      return { users, dailyStocks, allocations, sales };
+      const customFieldConfigs: CustomFieldConfig[] = cRows.map(row => ({
+        id: row.id,
+        name: row.name,
+        type: row.type as any,
+        target: row.target as any,
+      }));
+
+      return { users, dailyStocks, allocations, sales, customFieldConfigs };
     }
   } catch (err) {
     console.error('[Database] Error loading data from DB:', err);
@@ -355,28 +397,29 @@ export async function syncDataToDb(schema: DatabaseSchema): Promise<void> {
       await client.query('DELETE FROM allocations');
       await client.query('DELETE FROM daily_stocks');
       await client.query('DELETE FROM users');
+      await client.query('DELETE FROM custom_field_configs').catch(() => {});
 
       // Insert Users
       for (const u of schema.users) {
         await client.query(
-          'INSERT INTO users (id, email, name, role, password_hash, created_at) VALUES ($1, $2, $3, $4, $5, $6)',
-          [u.id, u.email, u.name, u.role, u.passwordHash, u.createdAt]
+          'INSERT INTO users (id, email, name, role, password_hash, created_at, photo) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+          [u.id, u.email, u.name, u.role, u.passwordHash, u.createdAt, u.photo || null]
         );
       }
 
       // Insert Daily Stocks
       for (const d of schema.dailyStocks) {
         await client.query(
-          'INSERT INTO daily_stocks (id, date, opening_amount, opening_sim, flexy, flexy_claim1, flexy_claim2, sim, created_at, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)',
-          [d.id, d.date, d.openingAmount, d.openingSim, d.flexy, d.flexyClaim1, d.flexyClaim2, d.sim, d.createdAt, d.createdBy]
+          'INSERT INTO daily_stocks (id, date, opening_amount, opening_sim, flexy, flexy_claim1, flexy_claim2, sim, created_at, created_by, custom_fields) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)',
+          [d.id, d.date, d.openingAmount, d.openingSim, d.flexy, d.flexyClaim1, d.flexyClaim2, d.sim, d.createdAt, d.createdBy, JSON.stringify(d.customFields || {})]
         );
       }
 
       // Insert Allocations
       for (const a of schema.allocations) {
         await client.query(
-          'INSERT INTO allocations (id, date, fsc_id, opening_balance, opening_sim, auto_refill1, auto_refill2, auto_refill3, ec_manual1, ec_manual2, sim, total_allocated, created_at, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)',
-          [a.id, a.date, a.fscId, a.openingBalance, a.openingSim, a.autoRefill1, a.autoRefill2, a.autoRefill3, a.ecManual1, a.ecManual2, a.sim, a.totalAllocated, a.createdAt, a.createdBy]
+          'INSERT INTO allocations (id, date, fsc_id, opening_balance, opening_sim, auto_refill1, auto_refill2, auto_refill3, ec_manual1, ec_manual2, sim, total_allocated, created_at, created_by, custom_fields) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)',
+          [a.id, a.date, a.fscId, a.openingBalance, a.openingSim, a.autoRefill1, a.autoRefill2, a.autoRefill3, a.ecManual1, a.ecManual2, a.sim, a.totalAllocated, a.createdAt, a.createdBy, JSON.stringify(a.customFields || {})]
         );
       }
 
@@ -398,6 +441,16 @@ export async function syncDataToDb(schema: DatabaseSchema): Promise<void> {
         );
       }
 
+      // Insert Custom Field Configs
+      if (schema.customFieldConfigs) {
+        for (const c of schema.customFieldConfigs) {
+          await client.query(
+            'INSERT INTO custom_field_configs (id, name, type, target) VALUES ($1, $2, $3, $4)',
+            [c.id, c.name, c.type, c.target]
+          );
+        }
+      }
+
       await client.query('COMMIT');
     } catch (err) {
       await client.query('ROLLBACK');
@@ -416,28 +469,29 @@ export async function syncDataToDb(schema: DatabaseSchema): Promise<void> {
       await sqliteExec('DELETE FROM allocations');
       await sqliteExec('DELETE FROM daily_stocks');
       await sqliteExec('DELETE FROM users');
+      await sqliteExec('DELETE FROM custom_field_configs').catch(() => {});
 
       // Insert Users
       for (const u of schema.users) {
         await sqliteRun(
-          'INSERT INTO users (id, email, name, role, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-          [u.id, u.email, u.name, u.role, u.passwordHash, u.createdAt]
+          'INSERT INTO users (id, email, name, role, password_hash, created_at, photo) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [u.id, u.email, u.name, u.role, u.passwordHash, u.createdAt, u.photo || null]
         );
       }
 
       // Insert Daily Stocks
       for (const d of schema.dailyStocks) {
         await sqliteRun(
-          'INSERT INTO daily_stocks (id, date, opening_amount, opening_sim, flexy, flexy_claim1, flexy_claim2, sim, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [d.id, d.date, d.openingAmount, d.openingSim, d.flexy, d.flexyClaim1, d.flexyClaim2, d.sim, d.createdAt, d.createdBy]
+          'INSERT INTO daily_stocks (id, date, opening_amount, opening_sim, flexy, flexy_claim1, flexy_claim2, sim, created_at, created_by, custom_fields) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [d.id, d.date, d.openingAmount, d.openingSim, d.flexy, d.flexyClaim1, d.flexyClaim2, d.sim, d.createdAt, d.createdBy, JSON.stringify(d.customFields || {})]
         );
       }
 
       // Insert Allocations
       for (const a of schema.allocations) {
         await sqliteRun(
-          'INSERT INTO allocations (id, date, fsc_id, opening_balance, opening_sim, auto_refill1, auto_refill2, auto_refill3, ec_manual1, ec_manual2, sim, total_allocated, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [a.id, a.date, a.fscId, a.openingBalance, a.openingSim, a.autoRefill1, a.autoRefill2, a.autoRefill3, a.ecManual1, a.ecManual2, a.sim, a.totalAllocated, a.createdAt, a.createdBy]
+          'INSERT INTO allocations (id, date, fsc_id, opening_balance, opening_sim, auto_refill1, auto_refill2, auto_refill3, ec_manual1, ec_manual2, sim, total_allocated, created_at, created_by, custom_fields) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [a.id, a.date, a.fscId, a.openingBalance, a.openingSim, a.autoRefill1, a.autoRefill2, a.autoRefill3, a.ecManual1, a.ecManual2, a.sim, a.totalAllocated, a.createdAt, a.createdBy, JSON.stringify(a.customFields || {})]
         );
       }
 
@@ -457,6 +511,16 @@ export async function syncDataToDb(schema: DatabaseSchema): Promise<void> {
             s.reviewedAt, s.createdBy, s.submittedBy, s.reviewedBy
           ]
         );
+      }
+
+      // Insert Custom Field Configs
+      if (schema.customFieldConfigs) {
+        for (const c of schema.customFieldConfigs) {
+          await sqliteRun(
+            'INSERT INTO custom_field_configs (id, name, type, target) VALUES (?, ?, ?, ?)',
+            [c.id, c.name, c.type, c.target]
+          );
+        }
       }
 
       await sqliteExec('COMMIT');

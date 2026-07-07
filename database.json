@@ -267,6 +267,10 @@
         "allocations",
         "sales",
         "reports",
+        "users",
+        "user-roles",
+        "masters-fsc",
+        "masters-stock",
         "audit"
       ]
     },
@@ -288,15 +292,15 @@
   ],
   "auditLogs": [
     {
-      "id": "audit-12b62913d76de478",
-      "timestamp": "2026-07-07T09:15:04.751Z",
+      "id": "audit-e5423b9c52b19355",
+      "timestamp": "2026-07-07T14:43:51.559Z",
       "userId": "user-admin-id",
       "userEmail": "admin@airtel.com",
       "userName": "Airtel Administrator",
       "userRole": "Admin",
-      "action": "UPDATE",
-      "targetType": "rolePermission",
-      "details": "Updated role access permissions matrix."
+      "action": "LOGIN",
+      "targetType": "auth",
+      "details": "User logged in successfully (Role: Admin)"
     }
   ]
 }

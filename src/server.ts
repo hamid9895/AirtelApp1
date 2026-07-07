@@ -22,6 +22,14 @@ interface User {
   role: 'Admin' | 'Manager' | 'Approver' | 'FSC';
   passwordHash: string;
   createdAt: string;
+  photo?: string | null;
+}
+
+interface CustomFieldConfig {
+  id: string;
+  name: string;
+  type: 'text' | 'number' | 'date';
+  target: 'fsc' | 'stock';
 }
 
 interface DailyStock {
@@ -35,6 +43,7 @@ interface DailyStock {
   sim: number;
   createdAt: string;
   createdBy: string | null;
+  customFields?: Record<string, string | number>;
 }
 
 interface Allocation {
@@ -52,6 +61,7 @@ interface Allocation {
   totalAllocated: number; // computed
   createdAt: string;
   createdBy: string | null;
+  customFields?: Record<string, string | number>;
 }
 
 interface Sale {
@@ -84,11 +94,31 @@ interface Sale {
   reviewedBy: string | null;
 }
 
+interface RolePermission {
+  role: 'Admin' | 'Manager' | 'Approver' | 'FSC';
+  allowedTabs: string[];
+}
+
+interface AuditLogEntry {
+  id: string;
+  timestamp: string;
+  userId: string;
+  userEmail: string;
+  userName: string;
+  userRole: string;
+  action: string;
+  targetType: 'dailyStock' | 'allocation' | 'sale' | 'customField' | 'rolePermission' | 'user' | 'auth';
+  details: string;
+}
+
 interface DatabaseSchema {
   users: User[];
   dailyStocks: DailyStock[];
   allocations: Allocation[];
   sales: Sale[];
+  customFieldConfigs: CustomFieldConfig[];
+  rolePermissions?: RolePermission[];
+  auditLogs?: AuditLogEntry[];
 }
 
 // --- PASSWORD HASHING ---
@@ -154,7 +184,27 @@ function loadDatabase(): DatabaseSchema {
       users: [],
       dailyStocks: [],
       allocations: [],
-      sales: []
+      sales: [],
+      customFieldConfigs: [],
+      rolePermissions: [
+        {
+          role: 'Admin',
+          allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit']
+        },
+        {
+          role: 'Manager',
+          allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit']
+        },
+        {
+          role: 'Approver',
+          allowedTabs: ['dashboard', 'sales', 'reports']
+        },
+        {
+          role: 'FSC',
+          allowedTabs: ['dashboard', 'sales']
+        }
+      ],
+      auditLogs: []
     };
     
     // Create Default Seed Users
@@ -203,169 +253,9 @@ function loadDatabase(): DatabaseSchema {
     
     initialDb.users = users;
     
-    // Create Daily Stock seeds (Yesterday and Today)
-    const yesterdayDate = new Date();
-    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-    const yesterdayStr = yesterdayDate.toISOString().split('T')[0];
-    
-    const todayStr = new Date().toISOString().split('T')[0];
-    
-    initialDb.dailyStocks = [
-      {
-        id: 'stock-yesterday',
-        date: yesterdayStr,
-        openingAmount: 140000,
-        openingSim: 450,
-        flexy: 95000,
-        flexyClaim1: 18000,
-        flexyClaim2: 12000,
-        sim: 300,
-        createdAt: new Date().toISOString(),
-        createdBy: 'user-manager-id'
-      },
-      {
-        id: 'stock-today',
-        date: todayStr,
-        openingAmount: 152805,
-        openingSim: 500,
-        flexy: 105000,
-        flexyClaim1: 22000,
-        flexyClaim2: 15800,
-        sim: 350,
-        createdAt: new Date().toISOString(),
-        createdBy: 'user-manager-id'
-      }
-    ];
-    
-    // Create Allocation seeds (Yesterday and Today)
-    initialDb.allocations = [
-      {
-        id: 'alloc-rajesh-yesterday',
-        date: yesterdayStr,
-        fscId: 'user-fsc-rajesh',
-        openingBalance: 18000,
-        openingSim: 45,
-        autoRefill1: 28000,
-        autoRefill2: 18000,
-        autoRefill3: 12000,
-        ecManual1: 4000,
-        ecManual2: 4000,
-        sim: 35,
-        totalAllocated: 88000, // calculated
-        createdAt: new Date().toISOString(),
-        createdBy: 'user-manager-id'
-      },
-      {
-        id: 'alloc-sita-yesterday',
-        date: yesterdayStr,
-        fscId: 'user-fsc-sita',
-        openingBalance: 12000,
-        openingSim: 35,
-        autoRefill1: 22000,
-        autoRefill2: 12000,
-        autoRefill3: 8000,
-        ecManual1: 3000,
-        ecManual2: 1000,
-        sim: 25,
-        totalAllocated: 58000,
-        createdAt: new Date().toISOString(),
-        createdBy: 'user-manager-id'
-      },
-      {
-        id: 'alloc-rajesh-today',
-        date: todayStr,
-        fscId: 'user-fsc-rajesh',
-        openingBalance: 20000,
-        openingSim: 50,
-        autoRefill1: 30000,
-        autoRefill2: 20000,
-        autoRefill3: 15000,
-        ecManual1: 5000,
-        ecManual2: 5000,
-        sim: 40,
-        totalAllocated: 95000,
-        createdAt: new Date().toISOString(),
-        createdBy: 'user-manager-id'
-      },
-      {
-        id: 'alloc-sita-today',
-        date: todayStr,
-        fscId: 'user-fsc-sita',
-        openingBalance: 15000,
-        openingSim: 40,
-        autoRefill1: 25000,
-        autoRefill2: 15000,
-        autoRefill3: 10000,
-        ecManual1: 4000,
-        ecManual2: 2000,
-        sim: 30,
-        totalAllocated: 71000,
-        createdAt: new Date().toISOString(),
-        createdBy: 'user-manager-id'
-      }
-    ];
-    
-    // Create Sales seeds (Yesterday as Approved and Pending)
-    initialDb.sales = [
-      {
-        id: 'sale-rajesh-yesterday',
-        date: yesterdayStr,
-        fscId: 'user-fsc-rajesh',
-        allocationId: 'alloc-rajesh-yesterday',
-        openingBalance: 18000,
-        autoRefill1: 28000,
-        autoRefill2: 18000,
-        autoRefill3: 12000,
-        ecManual1: 4000,
-        ecManual2: 4000,
-        closingBalance: 3200,
-        previousShort: 0,
-        saleTotal: 77200, // Calculated sales
-        saleAmount: 77200,
-        shortAmount: 0,
-        openingSim: 45,
-        sim: 32,
-        closingSim: 13,
-        status: 'Approved',
-        remarks: 'All cash collected and matched',
-        reviewNote: 'Verified with bank deposit confirmation',
-        createdAt: new Date().toISOString(),
-        submittedAt: new Date().toISOString(),
-        reviewedAt: new Date().toISOString(),
-        createdBy: 'user-fsc-rajesh',
-        submittedBy: 'user-fsc-rajesh',
-        reviewedBy: 'user-approver-id'
-      },
-      {
-        id: 'sale-sita-yesterday',
-        date: yesterdayStr,
-        fscId: 'user-fsc-sita',
-        allocationId: 'alloc-sita-yesterday',
-        openingBalance: 12000,
-        autoRefill1: 22000,
-        autoRefill2: 12000,
-        autoRefill3: 8000,
-        ecManual1: 3000,
-        ecManual2: 1000,
-        closingBalance: 1500,
-        previousShort: 500,
-        saleTotal: 56500,
-        saleAmount: 56000,
-        shortAmount: 500,
-        openingSim: 35,
-        sim: 28,
-        closingSim: 7,
-        status: 'Pending',
-        remarks: 'Short of ₹500. Will settle tomorrow.',
-        reviewNote: null,
-        createdAt: new Date().toISOString(),
-        submittedAt: new Date().toISOString(),
-        reviewedAt: null,
-        createdBy: 'user-fsc-sita',
-        submittedBy: 'user-fsc-sita',
-        reviewedBy: null
-      }
-    ];
+    initialDb.dailyStocks = [];
+    initialDb.allocations = [];
+    initialDb.sales = [];
     
     fs.writeFileSync(DATABASE_FILE, JSON.stringify(initialDb, null, 2));
     memoryDb = initialDb;
@@ -374,6 +264,32 @@ function loadDatabase(): DatabaseSchema {
   
   const raw = fs.readFileSync(DATABASE_FILE, 'utf-8');
   const parsed = JSON.parse(raw);
+  if (!parsed.customFieldConfigs) {
+    parsed.customFieldConfigs = [];
+  }
+  if (!parsed.rolePermissions) {
+    parsed.rolePermissions = [
+      {
+        role: 'Admin',
+        allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit']
+      },
+      {
+        role: 'Manager',
+        allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit']
+      },
+      {
+        role: 'Approver',
+        allowedTabs: ['dashboard', 'sales', 'reports']
+      },
+      {
+        role: 'FSC',
+        allowedTabs: ['dashboard', 'sales']
+      }
+    ];
+  }
+  if (!parsed.auditLogs) {
+    parsed.auditLogs = [];
+  }
   memoryDb = parsed;
   return parsed;
 }
@@ -385,6 +301,24 @@ function saveDatabase(db: DatabaseSchema) {
   syncDataToDb(db)
     .then(() => console.log('[Database] Successfully synced memory state to Relational Database.'))
     .catch(err => console.error('[Database] Failed to sync memory state to Relational Database:', err));
+}
+
+function logAudit(db: DatabaseSchema, user: any, action: string, targetType: 'dailyStock' | 'allocation' | 'sale' | 'customField' | 'rolePermission' | 'user' | 'auth', details: string) {
+  if (!db.auditLogs) {
+    db.auditLogs = [];
+  }
+  const newLog: AuditLogEntry = {
+    id: `audit-${crypto.randomBytes(8).toString('hex')}`,
+    timestamp: new Date().toISOString(),
+    userId: user ? user.id : 'system',
+    userEmail: user ? user.email : 'system@airtel.com',
+    userName: user ? user.name : 'System Process',
+    userRole: user ? user.role : 'System',
+    action,
+    targetType,
+    details
+  };
+  db.auditLogs.push(newLog);
 }
 
 // --- MIDDLEWARES ---
@@ -438,6 +372,10 @@ app.post('/api/auth/login', (req, res) => {
   }
   
   const token = signToken({ id: user.id, email: user.email, name: user.name, role: user.role });
+  
+  logAudit(db, { id: user.id, email: user.email, name: user.name, role: user.role }, 'LOGIN', 'auth', `User logged in successfully (Role: ${user.role})`);
+  saveDatabase(db);
+
   res.json({
     success: true,
     token,
@@ -445,7 +383,8 @@ app.post('/api/auth/login', (req, res) => {
       id: user.id,
       email: user.email,
       name: user.name,
-      role: user.role
+      role: user.role,
+      photo: user.photo || null
     }
   });
 });
@@ -463,14 +402,15 @@ app.get('/api/auth/me', authenticateToken, (req: any, res) => {
       id: user.id,
       email: user.email,
       name: user.name,
-      role: user.role
+      role: user.role,
+      photo: user.photo || null
     }
   });
 });
 
 // POST /api/auth/register (Admin Only)
 app.post('/api/auth/register', authenticateToken, requireRole(['Admin']), (req, res) => {
-  const { email, name, role, password } = req.body;
+  const { email, name, role, password, photo } = req.body;
   
   if (!email || !name || !role || !password) {
     return res.status(400).json({ success: false, error: 'All fields (email, name, role, password) are required' });
@@ -497,7 +437,8 @@ app.post('/api/auth/register', authenticateToken, requireRole(['Admin']), (req, 
     name,
     role: role as any,
     passwordHash: hashPassword(password),
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    photo: photo || null
   };
   
   db.users.push(newUser);
@@ -509,7 +450,8 @@ app.post('/api/auth/register', authenticateToken, requireRole(['Admin']), (req, 
       id: newUser.id,
       email: newUser.email,
       name: newUser.name,
-      role: newUser.role
+      role: newUser.role,
+      photo: newUser.photo
     }
   });
 });
@@ -522,7 +464,8 @@ app.get('/api/auth/users', authenticateToken, requireRole(['Manager', 'Admin']),
     email: u.email,
     name: u.name,
     role: u.role,
-    createdAt: u.createdAt
+    createdAt: u.createdAt,
+    photo: u.photo || null
   }));
   res.json({ success: true, users: usersDto });
 });
@@ -541,7 +484,44 @@ app.get('/api/auth/users/:id', authenticateToken, (req, res) => {
       email: user.email,
       name: user.name,
       role: user.role,
-      createdAt: user.createdAt
+      createdAt: user.createdAt,
+      photo: user.photo || null
+    }
+  });
+});
+
+// PUT /api/auth/profile (Users can update their own details/photo)
+app.put('/api/auth/profile', authenticateToken, (req: any, res) => {
+  const db = loadDatabase();
+  const userIdx = db.users.findIndex(u => u.id === req.user.id);
+  if (userIdx === -1) {
+    return res.status(404).json({ success: false, error: 'User not found' });
+  }
+  
+  const { name, password, photo } = req.body;
+  const user = db.users[userIdx];
+  
+  if (name) user.name = name;
+  if (photo !== undefined) user.photo = photo;
+  
+  if (password) {
+    if (password.length < 6) {
+      return res.status(400).json({ success: false, error: 'Password must be at least 6 characters' });
+    }
+    user.passwordHash = hashPassword(password);
+  }
+  
+  db.users[userIdx] = user;
+  saveDatabase(db);
+  
+  res.json({
+    success: true,
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      photo: user.photo || null
     }
   });
 });
@@ -554,7 +534,7 @@ app.put('/api/auth/users/:id', authenticateToken, requireRole(['Admin']), (req, 
     return res.status(404).json({ success: false, error: 'User not found' });
   }
   
-  const { name, role, password, email } = req.body;
+  const { name, role, password, email, photo } = req.body;
   const user = db.users[userIdx];
   
   if (email && email.toLowerCase() !== user.email.toLowerCase()) {
@@ -566,6 +546,7 @@ app.put('/api/auth/users/:id', authenticateToken, requireRole(['Admin']), (req, 
   }
   
   if (name) user.name = name;
+  if (photo !== undefined) user.photo = photo;
   
   if (role) {
     const allowedRoles = ['Admin', 'Manager', 'Approver', 'FSC'];
@@ -591,7 +572,8 @@ app.put('/api/auth/users/:id', authenticateToken, requireRole(['Admin']), (req, 
       id: user.id,
       email: user.email,
       name: user.name,
-      role: user.role
+      role: user.role,
+      photo: user.photo || null
     }
   });
 });
@@ -649,12 +631,40 @@ app.post('/api/auth/change-password', authenticateToken, (req: any, res) => {
   res.json({ success: true, message: 'Password updated successfully' });
 });
 
+// Helper to compute a daily stock's closing cash and SIM count on the fly
+function computeStockClosing(stock: any, db: any) {
+  const allocationsOnDate = db.allocations.filter((a: any) => a.date === stock.date);
+  const totalAllocatedCash = allocationsOnDate.reduce((sum: number, a: any) => {
+    return sum + (Number(a.autoRefill1) || 0) + (Number(a.autoRefill2) || 0) + (Number(a.autoRefill3) || 0) + (Number(a.ecManual1) || 0) + (Number(a.ecManual2) || 0);
+  }, 0);
+  const totalAllocatedSim = allocationsOnDate.reduce((sum: number, a: any) => sum + (Number(a.sim) || 0), 0);
+
+  const approvedSalesOnDate = db.sales.filter((s: any) => s.date === stock.date && s.status === 'Approved');
+  const totalApprovedRemittance = approvedSalesOnDate.reduce((sum: number, s: any) => sum + (Number(s.saleAmount) || 0), 0);
+
+  const closingAmount = stock.openingAmount + stock.flexy + (stock.flexyClaim1 || 0) + (stock.flexyClaim2 || 0) - totalAllocatedCash + totalApprovedRemittance;
+  const closingSim = stock.openingSim + stock.sim - totalAllocatedSim;
+
+  return {
+    closingAmount,
+    closingSim
+  };
+}
+
 // 2. DAILY STOCK ENDPOINTS (Manager or Admin Only)
 
 // GET /api/stock
 app.get('/api/stock', authenticateToken, requireRole(['Manager', 'Admin']), (req, res) => {
   const db = loadDatabase();
-  const sortedStocks = [...db.dailyStocks].sort((a, b) => b.date.localeCompare(a.date));
+  const computedStocks = db.dailyStocks.map(s => {
+    const { closingAmount, closingSim } = computeStockClosing(s, db);
+    return {
+      ...s,
+      closingAmount,
+      closingSim
+    };
+  });
+  const sortedStocks = computedStocks.sort((a, b) => b.date.localeCompare(a.date));
   res.json({ success: true, dailyStocks: sortedStocks });
 });
 
@@ -665,7 +675,15 @@ app.get('/api/stock/:id', authenticateToken, requireRole(['Manager', 'Admin']), 
   if (!stock) {
     return res.status(404).json({ success: false, error: 'Stock entry not found' });
   }
-  res.json({ success: true, dailyStock: stock });
+  const { closingAmount, closingSim } = computeStockClosing(stock, db);
+  res.json({ 
+    success: true, 
+    dailyStock: {
+      ...stock,
+      closingAmount,
+      closingSim
+    } 
+  });
 });
 
 // GET /api/stock/date/:date
@@ -675,12 +693,20 @@ app.get('/api/stock/date/:date', authenticateToken, requireRole(['Manager', 'Adm
   if (!stock) {
     return res.status(404).json({ success: false, error: 'Stock entry not found for this date' });
   }
-  res.json({ success: true, dailyStock: stock });
+  const { closingAmount, closingSim } = computeStockClosing(stock, db);
+  res.json({ 
+    success: true, 
+    dailyStock: {
+      ...stock,
+      closingAmount,
+      closingSim
+    } 
+  });
 });
 
 // POST /api/stock
 app.post('/api/stock', authenticateToken, requireRole(['Manager', 'Admin']), (req: any, res) => {
-  const { date, openingAmount, openingSim, flexy, flexyClaim1, flexyClaim2, sim } = req.body;
+  const { date, openingAmount, openingSim, flexy, flexyClaim1, flexyClaim2, sim, customFields } = req.body;
   if (!date) {
     return res.status(400).json({ success: false, error: 'Date is required' });
   }
@@ -701,17 +727,20 @@ app.post('/api/stock', authenticateToken, requireRole(['Manager', 'Admin']), (re
     flexyClaim2: Number(flexyClaim2 || 0),
     sim: Number(sim || 0),
     createdAt: new Date().toISOString(),
-    createdBy: req.user.id
+    createdBy: req.user.id,
+    customFields: customFields || {}
   };
   
   db.dailyStocks.push(newStock);
+  logAudit(db, req.user, 'CREATE', 'dailyStock', `Created daily stock for ${date} (Opening: ₹${openingAmount}, Opening SIMs: ${openingSim})`);
   saveDatabase(db);
   
-  res.status(201).json({ success: true, dailyStock: newStock });
+  const { closingAmount, closingSim } = computeStockClosing(newStock, db);
+  res.status(201).json({ success: true, dailyStock: { ...newStock, closingAmount, closingSim } });
 });
 
 // PUT /api/stock/:id
-app.put('/api/stock/:id', authenticateToken, requireRole(['Manager', 'Admin']), (req, res) => {
+app.put('/api/stock/:id', authenticateToken, requireRole(['Manager', 'Admin']), (req: any, res) => {
   const db = loadDatabase();
   const idx = db.dailyStocks.findIndex(s => s.id === req.params.id);
   if (idx === -1) {
@@ -719,7 +748,7 @@ app.put('/api/stock/:id', authenticateToken, requireRole(['Manager', 'Admin']), 
   }
   
   const current = db.dailyStocks[idx];
-  const { openingAmount, openingSim, flexy, flexyClaim1, flexyClaim2, sim } = req.body;
+  const { openingAmount, openingSim, flexy, flexyClaim1, flexyClaim2, sim, customFields } = req.body;
   
   if (openingAmount !== undefined) current.openingAmount = Number(openingAmount);
   if (openingSim !== undefined) current.openingSim = Number(openingSim);
@@ -727,21 +756,25 @@ app.put('/api/stock/:id', authenticateToken, requireRole(['Manager', 'Admin']), 
   if (flexyClaim1 !== undefined) current.flexyClaim1 = Number(flexyClaim1);
   if (flexyClaim2 !== undefined) current.flexyClaim2 = Number(flexyClaim2);
   if (sim !== undefined) current.sim = Number(sim);
+  if (customFields !== undefined) current.customFields = customFields;
   
   db.dailyStocks[idx] = current;
+  logAudit(db, req.user, 'UPDATE', 'dailyStock', `Updated daily stock for ${current.date}`);
   saveDatabase(db);
   
-  res.json({ success: true, dailyStock: current });
+  const { closingAmount, closingSim } = computeStockClosing(current, db);
+  res.json({ success: true, dailyStock: { ...current, closingAmount, closingSim } });
 });
 
 // DELETE /api/stock/:id
-app.delete('/api/stock/:id', authenticateToken, requireRole(['Manager', 'Admin']), (req, res) => {
+app.delete('/api/stock/:id', authenticateToken, requireRole(['Manager', 'Admin']), (req: any, res) => {
   const db = loadDatabase();
-  const stockExists = db.dailyStocks.some(s => s.id === req.params.id);
-  if (!stockExists) {
+  const stock = db.dailyStocks.find(s => s.id === req.params.id);
+  if (!stock) {
     return res.status(404).json({ success: false, error: 'Stock entry not found' });
   }
   
+  logAudit(db, req.user, 'DELETE', 'dailyStock', `Deleted daily stock entry for ${stock.date}`);
   db.dailyStocks = db.dailyStocks.filter(s => s.id !== req.params.id);
   saveDatabase(db);
   res.status(204).end();
@@ -796,7 +829,7 @@ app.post('/api/allocation', authenticateToken, requireRole(['Manager', 'Admin'])
   const { 
     date, fscId, openingBalance, openingSim, 
     autoRefill1, autoRefill2, autoRefill3, 
-    ecManual1, ecManual2, sim 
+    ecManual1, ecManual2, sim, customFields 
   } = req.body;
   
   if (!date || !fscId) {
@@ -836,10 +869,12 @@ app.post('/api/allocation', authenticateToken, requireRole(['Manager', 'Admin'])
     sim: Number(sim || 0),
     totalAllocated: totalAlloc,
     createdAt: new Date().toISOString(),
-    createdBy: req.user.id
+    createdBy: req.user.id,
+    customFields: customFields || {}
   };
   
   db.allocations.push(newAlloc);
+  logAudit(db, req.user, 'CREATE', 'allocation', `Created FSC allocation for ${date} (FSC: ${fscUser.name}, Amount: ₹${totalAlloc})`);
   saveDatabase(db);
   
   res.status(201).json({ 
@@ -852,7 +887,7 @@ app.post('/api/allocation', authenticateToken, requireRole(['Manager', 'Admin'])
 });
 
 // PUT /api/allocation/:id
-app.put('/api/allocation/:id', authenticateToken, requireRole(['Manager', 'Admin']), (req, res) => {
+app.put('/api/allocation/:id', authenticateToken, requireRole(['Manager', 'Admin']), (req: any, res) => {
   const db = loadDatabase();
   const idx = db.allocations.findIndex(a => a.id === req.params.id);
   if (idx === -1) {
@@ -863,7 +898,7 @@ app.put('/api/allocation/:id', authenticateToken, requireRole(['Manager', 'Admin
   const { 
     openingBalance, openingSim, 
     autoRefill1, autoRefill2, autoRefill3, 
-    ecManual1, ecManual2, sim 
+    ecManual1, ecManual2, sim, customFields 
   } = req.body;
   
   if (openingBalance !== undefined) current.openingBalance = Number(openingBalance);
@@ -874,13 +909,14 @@ app.put('/api/allocation/:id', authenticateToken, requireRole(['Manager', 'Admin
   if (ecManual1 !== undefined) current.ecManual1 = Number(ecManual1);
   if (ecManual2 !== undefined) current.ecManual2 = Number(ecManual2);
   if (sim !== undefined) current.sim = Number(sim);
+  if (customFields !== undefined) current.customFields = customFields;
   
   current.totalAllocated = current.openingBalance + current.autoRefill1 + current.autoRefill2 + current.autoRefill3 + current.ecManual1 + current.ecManual2;
   
   db.allocations[idx] = current;
-  saveDatabase(db);
-  
   const fscUser = db.users.find(u => u.id === current.fscId);
+  logAudit(db, req.user, 'UPDATE', 'allocation', `Updated FSC allocation for ${current.date} (FSC: ${fscUser ? fscUser.name : 'Unknown FSC'}, Amount: ₹${current.totalAllocated})`);
+  saveDatabase(db);
   res.json({ 
     success: true, 
     allocation: {
@@ -891,13 +927,15 @@ app.put('/api/allocation/:id', authenticateToken, requireRole(['Manager', 'Admin
 });
 
 // DELETE /api/allocation/:id
-app.delete('/api/allocation/:id', authenticateToken, requireRole(['Manager', 'Admin']), (req, res) => {
+app.delete('/api/allocation/:id', authenticateToken, requireRole(['Manager', 'Admin']), (req: any, res) => {
   const db = loadDatabase();
-  const exists = db.allocations.some(a => a.id === req.params.id);
-  if (!exists) {
+  const allocation = db.allocations.find(a => a.id === req.params.id);
+  if (!allocation) {
     return res.status(404).json({ success: false, error: 'Allocation not found' });
   }
   
+  const fscUser = db.users.find(u => u.id === allocation.fscId);
+  logAudit(db, req.user, 'DELETE', 'allocation', `Deleted FSC allocation for ${allocation.date} (FSC: ${fscUser ? fscUser.name : 'Unknown FSC'})`);
   db.allocations = db.allocations.filter(a => a.id !== req.params.id);
   
   // Set referencing allocations on sales to null
@@ -905,6 +943,81 @@ app.delete('/api/allocation/:id', authenticateToken, requireRole(['Manager', 'Ad
   
   saveDatabase(db);
   res.status(204).end();
+});
+
+
+// 3.5 CUSTOM FIELD CONFIG ENDPOINTS (Manager or Admin Only)
+
+// GET /api/custom-fields
+app.get('/api/custom-fields', authenticateToken, (req, res) => {
+  const db = loadDatabase();
+  res.json({ success: true, customFieldConfigs: db.customFieldConfigs || [] });
+});
+
+// POST /api/custom-fields
+app.post('/api/custom-fields', authenticateToken, requireRole(['Admin', 'Manager']), (req: any, res) => {
+  const { name, type, target } = req.body;
+  if (!name || !type || !target) {
+    return res.status(400).json({ success: false, error: 'Fields name, type, and target are required' });
+  }
+  
+  const db = loadDatabase();
+  if (!db.customFieldConfigs) {
+    db.customFieldConfigs = [];
+  }
+  
+  const newConfig: CustomFieldConfig = {
+    id: `cf-${crypto.randomBytes(8).toString('hex')}`,
+    name,
+    type: type as any,
+    target: target as any
+  };
+  
+  db.customFieldConfigs.push(newConfig);
+  logAudit(db, req.user, 'CREATE', 'customField', `Created custom field config: "${name}" for "${target}" (Type: ${type})`);
+  saveDatabase(db);
+  
+  res.status(201).json({ success: true, customFieldConfig: newConfig });
+});
+
+// DELETE /api/custom-fields/:id
+app.delete('/api/custom-fields/:id', authenticateToken, requireRole(['Admin', 'Manager']), (req: any, res) => {
+  const db = loadDatabase();
+  if (!db.customFieldConfigs) {
+    db.customFieldConfigs = [];
+  }
+  
+  const idx = db.customFieldConfigs.findIndex(c => c.id === req.params.id);
+  if (idx === -1) {
+    return res.status(404).json({ success: false, error: 'Custom field configuration not found' });
+  }
+  
+  const configToDelete = db.customFieldConfigs[idx];
+  db.customFieldConfigs.splice(idx, 1);
+  
+  logAudit(db, req.user, 'DELETE', 'customField', `Deleted custom field config: "${configToDelete.name}" associated with "${configToDelete.target}"`);
+  
+  // Clean up references in daily stocks or allocations
+  if (configToDelete.target === 'stock') {
+    db.dailyStocks = db.dailyStocks.map(s => {
+      if (s.customFields && s.customFields[configToDelete.id] !== undefined) {
+        const { [configToDelete.id]: _, ...rest } = s.customFields;
+        return { ...s, customFields: rest };
+      }
+      return s;
+    });
+  } else if (configToDelete.target === 'fsc') {
+    db.allocations = db.allocations.map(a => {
+      if (a.customFields && a.customFields[configToDelete.id] !== undefined) {
+        const { [configToDelete.id]: _, ...rest } = a.customFields;
+        return { ...a, customFields: rest };
+      }
+      return a;
+    });
+  }
+  
+  saveDatabase(db);
+  res.json({ success: true });
 });
 
 
@@ -1047,6 +1160,7 @@ app.post('/api/sale', authenticateToken, (req: any, res) => {
   };
   
   db.sales.push(newSale);
+  logAudit(db, req.user, 'CREATE', 'sale', `Created sales sheet for date ${date} (FSC: ${fscUser.name}, Value: ₹${saleTotal})`);
   saveDatabase(db);
   
   res.status(201).json({ success: true, sale: newSale });
@@ -1097,6 +1211,8 @@ app.put('/api/sale/:id', authenticateToken, (req: any, res) => {
   current.shortAmount = Math.max(0, current.saleTotal - current.saleAmount) + current.previousShort;
   
   db.sales[idx] = current;
+  const fscUser = db.users.find(u => u.id === current.fscId);
+  logAudit(db, req.user, 'UPDATE', 'sale', `Updated sales sheet for date ${current.date} (FSC: ${fscUser ? fscUser.name : 'Unknown FSC'}, Value: ₹${current.saleTotal})`);
   saveDatabase(db);
   
   res.json({ success: true, sale: current });
@@ -1127,6 +1243,8 @@ app.post('/api/sale/:id/submit', authenticateToken, (req: any, res) => {
   current.submittedBy = req.user.id;
   
   db.sales[idx] = current;
+  const fscUser = db.users.find(u => u.id === current.fscId);
+  logAudit(db, req.user, 'SUBMIT', 'sale', `Submitted sales sheet for date ${current.date} (FSC: ${fscUser ? fscUser.name : 'Unknown FSC'}, Value: ₹${current.saleTotal})`);
   saveDatabase(db);
   
   res.json({ success: true, sale: current });
@@ -1158,6 +1276,8 @@ app.post('/api/sale/:id/review', authenticateToken, requireRole(['Manager', 'App
   current.reviewedBy = req.user.id;
   
   db.sales[idx] = current;
+  const fscUserForReview = db.users.find(u => u.id === current.fscId);
+  logAudit(db, req.user, action === 'approve' ? 'APPROVE' : 'REJECT', 'sale', `${action === 'approve' ? 'Approved' : 'Rejected'} sales sheet for date ${current.date} (FSC: ${fscUserForReview ? fscUserForReview.name : 'Unknown FSC'}, Value: ₹${current.saleTotal})`);
   saveDatabase(db);
   
   res.json({ success: true, sale: current });
@@ -1178,11 +1298,13 @@ app.delete('/api/sale/:id', authenticateToken, (req: any, res) => {
     return res.status(403).json({ success: false, error: 'Access denied' });
   }
   
-  // Enforce BR-06: Approved sales cannot be deleted
-  if (current.status === 'Approved') {
+  // Enforce BR-06: Approved sales cannot be deleted (unless user is Admin)
+  if (current.status === 'Approved' && req.user.role !== 'Admin') {
     return res.status(400).json({ success: false, error: 'Approved sale entries cannot be deleted' });
   }
   
+  const fscUserForDelete = db.users.find(u => u.id === current.fscId);
+  logAudit(db, req.user, 'DELETE', 'sale', `Deleted sales sheet entry for date ${current.date} (FSC: ${fscUserForDelete ? fscUserForDelete.name : 'Unknown FSC'}, Status: ${current.status})`);
   db.sales = db.sales.filter(s => s.id !== req.params.id);
   saveDatabase(db);
   
@@ -1271,6 +1393,73 @@ app.get('/api/report/approved', authenticateToken, requireRole(['Manager', 'Admi
   });
   
   res.json({ success: true, sales: results });
+});
+
+
+// 8. ROLE PERMISSIONS ENDPOINTS
+
+// GET /api/role-permissions
+app.get('/api/role-permissions', authenticateToken, (req, res) => {
+  const db = loadDatabase();
+  if (!db.rolePermissions || db.rolePermissions.length === 0) {
+    db.rolePermissions = [
+      {
+        role: 'Admin',
+        allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit']
+      },
+      {
+        role: 'Manager',
+        allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit']
+      },
+      {
+        role: 'Approver',
+        allowedTabs: ['dashboard', 'sales', 'reports']
+      },
+      {
+        role: 'FSC',
+        allowedTabs: ['dashboard', 'sales']
+      }
+    ];
+    saveDatabase(db);
+  }
+  res.json({ success: true, permissions: db.rolePermissions });
+});
+
+// PUT /api/role-permissions (Admin Only)
+app.post('/api/role-permissions', authenticateToken, requireRole(['Admin']), (req: any, res) => {
+  const { permissions } = req.body;
+  if (!permissions || !Array.isArray(permissions)) {
+    return res.status(400).json({ success: false, error: 'Permissions must be an array' });
+  }
+  const db = loadDatabase();
+  db.rolePermissions = permissions;
+  logAudit(db, req.user, 'UPDATE', 'rolePermission', `Updated role access permissions matrix.`);
+  saveDatabase(db);
+  res.json({ success: true, permissions });
+});
+
+// Support both PUT and POST for convenience
+app.put('/api/role-permissions', authenticateToken, requireRole(['Admin']), (req: any, res) => {
+  const { permissions } = req.body;
+  if (!permissions || !Array.isArray(permissions)) {
+    return res.status(400).json({ success: false, error: 'Permissions must be an array' });
+  }
+  const db = loadDatabase();
+  db.rolePermissions = permissions;
+  logAudit(db, req.user, 'UPDATE', 'rolePermission', `Updated role access permissions matrix.`);
+  saveDatabase(db);
+  res.json({ success: true, permissions });
+});
+
+
+// 9. AUDIT LOGS ENDPOINTS
+
+// GET /api/audit-logs (Admin and Manager only)
+app.get('/api/audit-logs', authenticateToken, requireRole(['Admin', 'Manager']), (req, res) => {
+  const db = loadDatabase();
+  const logs = db.auditLogs || [];
+  const sortedLogs = [...logs].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  res.json({ success: true, auditLogs: sortedLogs });
 });
 
 

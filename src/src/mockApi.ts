@@ -8,6 +8,7 @@ interface User {
   role: 'Admin' | 'Manager' | 'Approver' | 'FSC';
   passwordHash: string; // "salt:hash" or just plain text for client-side easy match
   createdAt: string;
+  photo?: string | null;
 }
 
 interface DailyStock {
@@ -74,7 +75,9 @@ const STORAGE_KEYS = {
   USERS: 'airtel_mock_users',
   STOCKS: 'airtel_mock_stocks',
   ALLOCATIONS: 'airtel_mock_allocations',
-  SALES: 'airtel_mock_sales'
+  SALES: 'airtel_mock_sales',
+  ROLE_PERMISSIONS: 'airtel_mock_role_permissions',
+  AUDIT_LOGS: 'airtel_mock_audit_logs'
 };
 
 // Seed default accounts if they don't exist
@@ -90,7 +93,8 @@ export function initializeMockDatabase() {
         name: 'Airtel Administrator (Standalone)',
         role: 'Admin',
         passwordHash: 'admin123',
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        photo: null
       },
       {
         id: 'user-manager-id',
@@ -98,7 +102,8 @@ export function initializeMockDatabase() {
         name: 'Distribution Manager (Standalone)',
         role: 'Manager',
         passwordHash: 'manager123',
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        photo: null
       },
       {
         id: 'user-approver-id',
@@ -106,7 +111,8 @@ export function initializeMockDatabase() {
         name: 'Regional Approver (Standalone)',
         role: 'Approver',
         passwordHash: 'approver123',
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        photo: null
       },
       {
         id: 'user-fsc-rajesh',
@@ -114,7 +120,8 @@ export function initializeMockDatabase() {
         name: 'Rajesh Kumar (FSC Standalone)',
         role: 'FSC',
         passwordHash: 'fsc123',
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        photo: null
       },
       {
         id: 'user-fsc-sita',
@@ -122,175 +129,67 @@ export function initializeMockDatabase() {
         name: 'Sita Verma (FSC Standalone)',
         role: 'FSC',
         passwordHash: 'fsc123',
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        photo: null
       }
     ];
     localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
   }
 
   if (!localStorage.getItem(STORAGE_KEYS.STOCKS)) {
-    const stocks: DailyStock[] = [
-      {
-        id: 'stock-yesterday',
-        date: yesterdayStr,
-        openingAmount: 140000,
-        openingSim: 450,
-        flexy: 95000,
-        flexyClaim1: 18000,
-        flexyClaim2: 12000,
-        sim: 300,
-        createdAt: new Date().toISOString(),
-        createdBy: 'user-manager-id'
-      },
-      {
-        id: 'stock-today',
-        date: todayStr,
-        openingAmount: 152805,
-        openingSim: 500,
-        flexy: 105000,
-        flexyClaim1: 22000,
-        flexyClaim2: 15800,
-        sim: 350,
-        createdAt: new Date().toISOString(),
-        createdBy: 'user-manager-id'
-      }
-    ];
-    localStorage.setItem(STORAGE_KEYS.STOCKS, JSON.stringify(stocks));
+    localStorage.setItem(STORAGE_KEYS.STOCKS, JSON.stringify([]));
   }
 
   if (!localStorage.getItem(STORAGE_KEYS.ALLOCATIONS)) {
-    const allocations: Allocation[] = [
-      {
-        id: 'alloc-rajesh-yesterday',
-        date: yesterdayStr,
-        fscId: 'user-fsc-rajesh',
-        openingBalance: 18000,
-        openingSim: 45,
-        autoRefill1: 28000,
-        autoRefill2: 18000,
-        autoRefill3: 12000,
-        ecManual1: 4000,
-        ecManual2: 4000,
-        sim: 35,
-        totalAllocated: 88000,
-        createdAt: new Date().toISOString(),
-        createdBy: 'user-manager-id'
-      },
-      {
-        id: 'alloc-sita-yesterday',
-        date: yesterdayStr,
-        fscId: 'user-fsc-sita',
-        openingBalance: 12000,
-        openingSim: 35,
-        autoRefill1: 22000,
-        autoRefill2: 12000,
-        autoRefill3: 8000,
-        ecManual1: 3000,
-        ecManual2: 1000,
-        sim: 25,
-        totalAllocated: 58000,
-        createdAt: new Date().toISOString(),
-        createdBy: 'user-manager-id'
-      },
-      {
-        id: 'alloc-rajesh-today',
-        date: todayStr,
-        fscId: 'user-fsc-rajesh',
-        openingBalance: 20000,
-        openingSim: 50,
-        autoRefill1: 30000,
-        autoRefill2: 20000,
-        autoRefill3: 15000,
-        ecManual1: 5000,
-        ecManual2: 5000,
-        sim: 40,
-        totalAllocated: 95000,
-        createdAt: new Date().toISOString(),
-        createdBy: 'user-manager-id'
-      },
-      {
-        id: 'alloc-sita-today',
-        date: todayStr,
-        fscId: 'user-fsc-sita',
-        openingBalance: 15000,
-        openingSim: 40,
-        autoRefill1: 25000,
-        autoRefill2: 15000,
-        autoRefill3: 10000,
-        ecManual1: 4000,
-        ecManual2: 2000,
-        sim: 30,
-        totalAllocated: 71000,
-        createdAt: new Date().toISOString(),
-        createdBy: 'user-manager-id'
-      }
-    ];
-    localStorage.setItem(STORAGE_KEYS.ALLOCATIONS, JSON.stringify(allocations));
+    localStorage.setItem(STORAGE_KEYS.ALLOCATIONS, JSON.stringify([]));
   }
 
   if (!localStorage.getItem(STORAGE_KEYS.SALES)) {
-    const sales: Sale[] = [
+    localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify([]));
+  }
+
+  if (!localStorage.getItem(STORAGE_KEYS.ROLE_PERMISSIONS)) {
+    const permissions = [
       {
-        id: 'sale-rajesh-yesterday',
-        date: yesterdayStr,
-        fscId: 'user-fsc-rajesh',
-        allocationId: 'alloc-rajesh-yesterday',
-        openingBalance: 18000,
-        autoRefill1: 28000,
-        autoRefill2: 18000,
-        autoRefill3: 12000,
-        ecManual1: 4000,
-        ecManual2: 4000,
-        closingBalance: 3200,
-        previousShort: 0,
-        saleTotal: 77200,
-        saleAmount: 77200,
-        shortAmount: 0,
-        openingSim: 45,
-        sim: 32,
-        closingSim: 13,
-        status: 'Approved',
-        remarks: 'All cash collected and matched',
-        reviewNote: 'Verified with bank deposit confirmation',
-        createdAt: new Date().toISOString(),
-        submittedAt: new Date().toISOString(),
-        reviewedAt: new Date().toISOString(),
-        createdBy: 'user-fsc-rajesh',
-        submittedBy: 'user-fsc-rajesh',
-        reviewedBy: 'user-approver-id'
+        role: 'Admin',
+        allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit']
       },
       {
-        id: 'sale-sita-yesterday',
-        date: yesterdayStr,
-        fscId: 'user-fsc-sita',
-        allocationId: 'alloc-sita-yesterday',
-        openingBalance: 12000,
-        autoRefill1: 22000,
-        autoRefill2: 12000,
-        autoRefill3: 8000,
-        ecManual1: 3000,
-        ecManual2: 1000,
-        closingBalance: 1500,
-        previousShort: 500,
-        saleTotal: 56500,
-        saleAmount: 56000,
-        shortAmount: 500,
-        openingSim: 35,
-        sim: 28,
-        closingSim: 7,
-        status: 'Pending',
-        remarks: 'Short of ₹500. Will settle tomorrow.',
-        reviewNote: null,
-        createdAt: new Date().toISOString(),
-        submittedAt: new Date().toISOString(),
-        reviewedAt: null,
-        createdBy: 'user-fsc-sita',
-        submittedBy: 'user-fsc-sita',
-        reviewedBy: null
+        role: 'Manager',
+        allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit']
+      },
+      {
+        role: 'Approver',
+        allowedTabs: ['dashboard', 'sales', 'reports']
+      },
+      {
+        role: 'FSC',
+        allowedTabs: ['dashboard', 'sales']
       }
     ];
-    localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify(sales));
+    localStorage.setItem(STORAGE_KEYS.ROLE_PERMISSIONS, JSON.stringify(permissions));
   }
+
+  if (!localStorage.getItem(STORAGE_KEYS.AUDIT_LOGS)) {
+    localStorage.setItem(STORAGE_KEYS.AUDIT_LOGS, JSON.stringify([]));
+  }
+}
+
+function logMockAudit(user: any, action: string, targetType: string, details: string) {
+  const logs = getMockList<any>(STORAGE_KEYS.AUDIT_LOGS);
+  const newLog = {
+    id: `audit-${Math.random().toString(36).substring(2, 11)}`,
+    timestamp: new Date().toISOString(),
+    userId: user ? user.id : 'system',
+    userEmail: user ? user.email : 'system@airtel.com',
+    userName: user ? user.name : 'System Process',
+    userRole: user ? user.role : 'System',
+    action,
+    targetType,
+    details
+  };
+  logs.push(newLog);
+  saveMockList(STORAGE_KEYS.AUDIT_LOGS, logs);
 }
 
 // Helper to access mock lists
@@ -365,6 +264,8 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
     const tokenPayload = { id: user.id, email: user.email, name: user.name, role: user.role };
     const simulatedToken = btoa(JSON.stringify(tokenPayload));
 
+    logMockAudit(tokenPayload, 'LOGIN', 'auth', `User logged in successfully (Role: ${user.role})`);
+
     return mockResponse({
       success: true,
       token: simulatedToken,
@@ -372,7 +273,8 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
         id: user.id,
         email: user.email,
         name: user.name,
-        role: user.role
+        role: user.role,
+        photo: user.photo || null
       }
     });
   }
@@ -387,7 +289,39 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
         id: user.id,
         email: user.email,
         name: user.name,
-        role: user.role
+        role: user.role,
+        photo: user.photo || null
+      }
+    });
+  }
+
+  // PUT PROFILE (Users can update their own details/photo)
+  if (cleanUrl === '/api/auth/profile' && method === 'PUT') {
+    const user = getUserFromToken(headers);
+    if (!user) return mockResponse({ success: false, error: 'Authentication required' }, 401);
+
+    const users = getMockList<User>(STORAGE_KEYS.USERS);
+    const idx = users.findIndex(u => u.id === user.id);
+    if (idx === -1) return mockResponse({ success: false, error: 'User not found' }, 404);
+
+    const { name, password, photo } = body;
+    const targetUser = users[idx];
+
+    if (name) targetUser.name = name;
+    if (photo !== undefined) targetUser.photo = photo;
+    if (password) targetUser.passwordHash = password;
+
+    users[idx] = targetUser;
+    saveMockList(STORAGE_KEYS.USERS, users);
+
+    return mockResponse({
+      success: true,
+      user: {
+        id: targetUser.id,
+        email: targetUser.email,
+        name: targetUser.name,
+        role: targetUser.role,
+        photo: targetUser.photo || null
       }
     });
   }
@@ -402,7 +336,8 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
       id: u.id,
       email: u.email,
       name: u.name,
-      role: u.role
+      role: u.role,
+      photo: u.photo || null
     }));
     return mockResponse({ success: true, users });
   }
@@ -413,7 +348,7 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
       return mockResponse({ success: false, error: 'Administrator role required to create users' }, 403);
     }
 
-    const { email, name, role, password } = body;
+    const { email, name, role, password, photo } = body;
     const users = getMockList<User>(STORAGE_KEYS.USERS);
     if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
       return mockResponse({ success: false, error: 'Email address is already in use' }, 400);
@@ -425,7 +360,8 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
       name,
       role,
       passwordHash: password,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      photo: photo || null
     };
 
     users.push(newUser);
@@ -437,9 +373,53 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
         id: newUser.id,
         email: newUser.email,
         name: newUser.name,
-        role: newUser.role
+        role: newUser.role,
+        photo: newUser.photo || null
       }
     }, 211);
+  }
+
+  // PUT USER (Admin Only)
+  if (cleanUrl.startsWith('/api/auth/users/') && method === 'PUT') {
+    const user = getUserFromToken(headers);
+    if (!user || user.role !== 'Admin') {
+      return mockResponse({ success: false, error: 'Admin access required' }, 403);
+    }
+
+    const userId = cleanUrl.substring('/api/auth/users/'.length);
+    const users = getMockList<User>(STORAGE_KEYS.USERS);
+    const idx = users.findIndex(u => u.id === userId);
+    if (idx === -1) return mockResponse({ success: false, error: 'User not found' }, 404);
+
+    const { name, role, password, email, photo } = body;
+    const targetUser = users[idx];
+
+    if (email && email.toLowerCase() !== targetUser.email.toLowerCase()) {
+      const emailDup = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+      if (emailDup) {
+        return mockResponse({ success: false, error: 'Email address is already in use by another user' }, 400);
+      }
+      targetUser.email = email;
+    }
+
+    if (name) targetUser.name = name;
+    if (role) targetUser.role = role;
+    if (photo !== undefined) targetUser.photo = photo;
+    if (password) targetUser.passwordHash = password; // raw temporary match for mock
+
+    users[idx] = targetUser;
+    saveMockList(STORAGE_KEYS.USERS, users);
+
+    return mockResponse({
+      success: true,
+      user: {
+        id: targetUser.id,
+        email: targetUser.email,
+        name: targetUser.name,
+        role: targetUser.role,
+        photo: targetUser.photo || null
+      }
+    });
   }
 
   // DELETE USER (Admin Only)
@@ -513,6 +493,34 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
     return mockResponse(null, 204);
   }
 
+  // PUT /api/stock/:id (Manager / Admin Only)
+  if (cleanUrl.startsWith('/api/stock/') && method === 'PUT') {
+    const user = getUserFromToken(headers);
+    if (!user || !['Admin', 'Manager'].includes(user.role)) {
+      return mockResponse({ success: false, error: 'Privileged access required' }, 403);
+    }
+
+    const stockId = cleanUrl.substring('/api/stock/'.length);
+    const stocks = getMockList<DailyStock>(STORAGE_KEYS.STOCKS);
+    const idx = stocks.findIndex(s => s.id === stockId);
+    if (idx === -1) return mockResponse({ success: false, error: 'Stock entry not found' }, 404);
+
+    const current = stocks[idx];
+    const { openingAmount, openingSim, flexy, flexyClaim1, flexyClaim2, sim } = body;
+
+    if (openingAmount !== undefined) current.openingAmount = Number(openingAmount);
+    if (openingSim !== undefined) current.openingSim = Number(openingSim);
+    if (flexy !== undefined) current.flexy = Number(flexy);
+    if (flexyClaim1 !== undefined) current.flexyClaim1 = Number(flexyClaim1);
+    if (flexyClaim2 !== undefined) current.flexyClaim2 = Number(flexyClaim2);
+    if (sim !== undefined) current.sim = Number(sim);
+
+    stocks[idx] = current;
+    saveMockList(STORAGE_KEYS.STOCKS, stocks);
+
+    return mockResponse({ success: true, dailyStock: current });
+  }
+
   // 5. ALLOCATIONS (Manager/Admin CRUD)
   if (cleanUrl === '/api/allocation') {
     const user = getUserFromToken(headers);
@@ -569,6 +577,49 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
     saveMockList(STORAGE_KEYS.ALLOCATIONS, allocations);
 
     return mockResponse(null, 204);
+  }
+
+  // PUT /api/allocation/:id (Manager / Admin Only)
+  if (cleanUrl.startsWith('/api/allocation/') && method === 'PUT') {
+    const user = getUserFromToken(headers);
+    if (!user || !['Admin', 'Manager'].includes(user.role)) {
+      return mockResponse({ success: false, error: 'Privileged access required' }, 403);
+    }
+
+    const allocId = cleanUrl.substring('/api/allocation/'.length);
+    const allocations = getMockList<Allocation>(STORAGE_KEYS.ALLOCATIONS);
+    const idx = allocations.findIndex(a => a.id === allocId);
+    if (idx === -1) return mockResponse({ success: false, error: 'Allocation not found' }, 404);
+
+    const current = allocations[idx];
+    const { 
+      openingBalance, openingSim, 
+      autoRefill1, autoRefill2, autoRefill3, 
+      ecManual1, ecManual2, sim 
+    } = body;
+
+    if (openingBalance !== undefined) current.openingBalance = Number(openingBalance);
+    if (openingSim !== undefined) current.openingSim = Number(openingSim);
+    if (autoRefill1 !== undefined) current.autoRefill1 = Number(autoRefill1);
+    if (autoRefill2 !== undefined) current.autoRefill2 = Number(autoRefill2);
+    if (autoRefill3 !== undefined) current.autoRefill3 = Number(autoRefill3);
+    if (ecManual1 !== undefined) current.ecManual1 = Number(ecManual1);
+    if (ecManual2 !== undefined) current.ecManual2 = Number(ecManual2);
+    if (sim !== undefined) current.sim = Number(sim);
+
+    current.totalAllocated = current.openingBalance + current.autoRefill1 + current.autoRefill2 + current.autoRefill3 + current.ecManual1 + current.ecManual2;
+
+    allocations[idx] = current;
+    saveMockList(STORAGE_KEYS.ALLOCATIONS, allocations);
+
+    const fscUser = getMockList<User>(STORAGE_KEYS.USERS).find(u => u.id === current.fscId);
+    return mockResponse({ 
+      success: true, 
+      allocation: {
+        ...current,
+        fscName: fscUser ? fscUser.name : 'Unknown FSC'
+      } 
+    });
   }
 
   // 6. SALES WORKFLOW
@@ -710,7 +761,7 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
       return mockResponse({ success: false, error: 'Access denied' }, 403);
     }
 
-    if (saleItem.status === 'Approved') {
+    if (saleItem.status === 'Approved' && user.role !== 'Admin') {
       return mockResponse({ success: false, error: 'Approved reports cannot be deleted' }, 400);
     }
 
@@ -718,6 +769,55 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
     saveMockList(STORAGE_KEYS.SALES, sales);
 
     return mockResponse(null, 204);
+  }
+
+  // PUT /api/sale/:id (Only editable in Draft status)
+  if (cleanUrl.startsWith('/api/sale/') && method === 'PUT') {
+    const user = getUserFromToken(headers);
+    if (!user) return mockResponse({ success: false, error: 'Authentication required' }, 401);
+
+    const saleId = cleanUrl.substring('/api/sale/'.length);
+    const sales = getMockList<Sale>(STORAGE_KEYS.SALES);
+    const idx = sales.findIndex(s => s.id === saleId);
+    if (idx === -1) return mockResponse({ success: false, error: 'Sale record not found' }, 404);
+
+    const current = sales[idx];
+    if (user.role === 'FSC' && current.fscId !== user.id) {
+      return mockResponse({ success: false, error: 'Access denied' }, 403);
+    }
+
+    if (current.status !== 'Draft') {
+      return mockResponse({ success: false, error: 'Only sales in Draft status can be modified' }, 400);
+    }
+
+    const { 
+      openingBalance, autoRefill1, autoRefill2, autoRefill3, 
+      ecManual1, ecManual2, closingBalance, 
+      previousShort, saleAmount, openingSim, sim, closingSim, remarks 
+    } = body;
+
+    if (openingBalance !== undefined) current.openingBalance = Number(openingBalance);
+    if (autoRefill1 !== undefined) current.autoRefill1 = Number(autoRefill1);
+    if (autoRefill2 !== undefined) current.autoRefill2 = Number(autoRefill2);
+    if (autoRefill3 !== undefined) current.autoRefill3 = Number(autoRefill3);
+    if (ecManual1 !== undefined) current.ecManual1 = Number(ecManual1);
+    if (ecManual2 !== undefined) current.ecManual2 = Number(ecManual2);
+    if (closingBalance !== undefined) current.closingBalance = Number(closingBalance);
+    if (previousShort !== undefined) current.previousShort = Number(previousShort);
+    if (saleAmount !== undefined) current.saleAmount = Number(saleAmount);
+    if (openingSim !== undefined) current.openingSim = Number(openingSim);
+    if (sim !== undefined) current.sim = Number(sim);
+    if (closingSim !== undefined) current.closingSim = Number(closingSim);
+    if (remarks !== undefined) current.remarks = remarks;
+
+    // Recalculate
+    current.saleTotal = current.openingBalance + current.autoRefill1 + current.autoRefill2 + current.autoRefill3 + current.ecManual1 + current.ecManual2 - current.closingBalance;
+    current.shortAmount = Math.max(0, current.saleTotal - current.saleAmount) + current.previousShort;
+
+    sales[idx] = current;
+    saveMockList(STORAGE_KEYS.SALES, sales);
+
+    return mockResponse({ success: true, sale: current });
   }
 
   // 7. REPORTS GENERATOR (Manager / Admin)
@@ -757,6 +857,77 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
     return mockResponse({ success: true, summaries });
   }
 
+  // 8. ROLE PERMISSIONS
+  if (cleanUrl === '/api/role-permissions') {
+    const user = getUserFromToken(headers);
+    if (!user) return mockResponse({ success: false, error: 'Authentication required' }, 401);
+
+    if (method === 'GET') {
+      let permissions = getMockList<any>(STORAGE_KEYS.ROLE_PERMISSIONS);
+      if (!permissions || permissions.length === 0) {
+        permissions = [
+          {
+            role: 'Admin',
+            allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit']
+          },
+          {
+            role: 'Manager',
+            allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit']
+          },
+          {
+            role: 'Approver',
+            allowedTabs: ['dashboard', 'sales', 'reports']
+          },
+          {
+            role: 'FSC',
+            allowedTabs: ['dashboard', 'sales']
+          }
+        ];
+        saveMockList(STORAGE_KEYS.ROLE_PERMISSIONS, permissions);
+      }
+      return mockResponse({ success: true, permissions });
+    }
+
+    if (method === 'PUT' || method === 'POST') {
+      if (user.role !== 'Admin') {
+        return mockResponse({ success: false, error: 'Admin role is required' }, 403);
+      }
+      const { permissions } = body;
+      if (!permissions || !Array.isArray(permissions)) {
+        return mockResponse({ success: false, error: 'Permissions must be an array' }, 400);
+      }
+      saveMockList(STORAGE_KEYS.ROLE_PERMISSIONS, permissions);
+      logMockAudit(user, 'UPDATE', 'rolePermission', `Updated role access permissions matrix.`);
+      return mockResponse({ success: true, permissions });
+    }
+  }
+
+  // 9. AUDIT LOGS
+  if (cleanUrl === '/api/audit-logs' && method === 'GET') {
+    const user = getUserFromToken(headers);
+    if (!user || !['Admin', 'Manager'].includes(user.role)) {
+      return mockResponse({ success: false, error: 'Privileged role is required' }, 403);
+    }
+    const logs = getMockList<any>(STORAGE_KEYS.AUDIT_LOGS);
+    const sortedLogs = [...logs].sort((a: any, b: any) => b.timestamp.localeCompare(a.timestamp));
+    return mockResponse({ success: true, auditLogs: sortedLogs });
+  }
+
   // 404 FALLBACK
   return mockResponse({ success: false, error: `Mock API: Endpoint not found: ${cleanUrl}` }, 404);
 }
+
+export const appFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as any).url || '';
+  if (url.startsWith('/api')) {
+    try {
+      const response = await window.fetch(input, init);
+      return response;
+    } catch (err) {
+      console.warn(`[Airtel Distro Standalone] Server offline. Accessing local mock storage for: ${url}`, err);
+      return handleMockApiRequest(url, init);
+    }
+  }
+  return window.fetch(input, init);
+};
+
