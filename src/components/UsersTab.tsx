@@ -100,7 +100,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
       handlePhotoReader(file, async (base64) => {
         setMyPhoto(base64);
         try {
-          const res = await window.fetch('/api/auth/profile', {
+          const res = await fetch('/api/auth/profile', {
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json',

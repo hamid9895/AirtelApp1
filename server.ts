@@ -94,12 +94,31 @@ interface Sale {
   reviewedBy: string | null;
 }
 
+interface RolePermission {
+  role: 'Admin' | 'Manager' | 'Approver' | 'FSC';
+  allowedTabs: string[];
+}
+
+interface AuditLogEntry {
+  id: string;
+  timestamp: string;
+  userId: string;
+  userEmail: string;
+  userName: string;
+  userRole: string;
+  action: string;
+  targetType: 'dailyStock' | 'allocation' | 'sale' | 'customField' | 'rolePermission';
+  details: string;
+}
+
 interface DatabaseSchema {
   users: User[];
   dailyStocks: DailyStock[];
   allocations: Allocation[];
   sales: Sale[];
   customFieldConfigs: CustomFieldConfig[];
+  rolePermissions?: RolePermission[];
+  auditLogs?: AuditLogEntry[];
 }
 
 // --- PASSWORD HASHING ---
@@ -166,7 +185,26 @@ function loadDatabase(): DatabaseSchema {
       dailyStocks: [],
       allocations: [],
       sales: [],
-      customFieldConfigs: []
+      customFieldConfigs: [],
+      rolePermissions: [
+        {
+          role: 'Admin',
+          allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit']
+        },
+        {
+          role: 'Manager',
+          allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit']
+        },
+        {
+          role: 'Approver',
+          allowedTabs: ['dashboard', 'sales', 'reports']
+        },
+        {
+          role: 'FSC',
+          allowedTabs: ['dashboard', 'sales']
+        }
+      ],
+      auditLogs: []
     };
     
     // Create Default Seed Users
@@ -389,6 +427,29 @@ function loadDatabase(): DatabaseSchema {
   if (!parsed.customFieldConfigs) {
     parsed.customFieldConfigs = [];
   }
+  if (!parsed.rolePermissions) {
+    parsed.rolePermissions = [
+      {
+        role: 'Admin',
+        allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit']
+      },
+      {
+        role: 'Manager',
+        allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit']
+      },
+      {
+        role: 'Approver',
+        allowedTabs: ['dashboard', 'sales', 'reports']
+      },
+      {
+        role: 'FSC',
+        allowedTabs: ['dashboard', 'sales']
+      }
+    ];
+  }
+  if (!parsed.auditLogs) {
+    parsed.auditLogs = [];
+  }
   memoryDb = parsed;
   return parsed;
 }
@@ -400,6 +461,24 @@ function saveDatabase(db: DatabaseSchema) {
   syncDataToDb(db)
     .then(() => console.log('[Database] Successfully synced memory state to Relational Database.'))
     .catch(err => console.error('[Database] Failed to sync memory state to Relational Database:', err));
+}
+
+function logAudit(db: DatabaseSchema, user: any, action: string, targetType: 'dailyStock' | 'allocation' | 'sale' | 'customField' | 'rolePermission', details: string) {
+  if (!db.auditLogs) {
+    db.auditLogs = [];
+  }
+  const newLog: AuditLogEntry = {
+    id: `audit-${crypto.randomBytes(8).toString('hex')}`,
+    timestamp: new Date().toISOString(),
+    userId: user ? user.id : 'system',
+    userEmail: user ? user.email : 'system@airtel.com',
+    userName: user ? user.name : 'System Process',
+    userRole: user ? user.role : 'System',
+    action,
+    targetType,
+    details
+  };
+  db.auditLogs.push(newLog);
 }
 
 // --- MIDDLEWARES ---
@@ -809,6 +888,7 @@ app.post('/api/stock', authenticateToken, requireRole(['Manager', 'Admin']), (re
   };
   
   db.dailyStocks.push(newStock);
+  logAudit(db, req.user, 'CREATE', 'dailyStock', `Created daily stock for ${date} (Opening: ₹${openingAmount}, Opening SIMs: ${openingSim})`);
   saveDatabase(db);
   
   const { closingAmount, closingSim } = computeStockClosing(newStock, db);
@@ -816,7 +896,7 @@ app.post('/api/stock', authenticateToken, requireRole(['Manager', 'Admin']), (re
 });
 
 // PUT /api/stock/:id
-app.put('/api/stock/:id', authenticateToken, requireRole(['Manager', 'Admin']), (req, res) => {
+app.put('/api/stock/:id', authenticateToken, requireRole(['Manager', 'Admin']), (req: any, res) => {
   const db = loadDatabase();
   const idx = db.dailyStocks.findIndex(s => s.id === req.params.id);
   if (idx === -1) {
@@ -835,6 +915,7 @@ app.put('/api/stock/:id', authenticateToken, requireRole(['Manager', 'Admin']), 
   if (customFields !== undefined) current.customFields = customFields;
   
   db.dailyStocks[idx] = current;
+  logAudit(db, req.user, 'UPDATE', 'dailyStock', `Updated daily stock for ${current.date}`);
   saveDatabase(db);
   
   const { closingAmount, closingSim } = computeStockClosing(current, db);
@@ -842,13 +923,14 @@ app.put('/api/stock/:id', authenticateToken, requireRole(['Manager', 'Admin']), 
 });
 
 // DELETE /api/stock/:id
-app.delete('/api/stock/:id', authenticateToken, requireRole(['Manager', 'Admin']), (req, res) => {
+app.delete('/api/stock/:id', authenticateToken, requireRole(['Manager', 'Admin']), (req: any, res) => {
   const db = loadDatabase();
-  const stockExists = db.dailyStocks.some(s => s.id === req.params.id);
-  if (!stockExists) {
+  const stock = db.dailyStocks.find(s => s.id === req.params.id);
+  if (!stock) {
     return res.status(404).json({ success: false, error: 'Stock entry not found' });
   }
   
+  logAudit(db, req.user, 'DELETE', 'dailyStock', `Deleted daily stock entry for ${stock.date}`);
   db.dailyStocks = db.dailyStocks.filter(s => s.id !== req.params.id);
   saveDatabase(db);
   res.status(204).end();
@@ -948,6 +1030,7 @@ app.post('/api/allocation', authenticateToken, requireRole(['Manager', 'Admin'])
   };
   
   db.allocations.push(newAlloc);
+  logAudit(db, req.user, 'CREATE', 'allocation', `Created FSC allocation for ${date} (FSC: ${fscUser.name}, Amount: ₹${totalAlloc})`);
   saveDatabase(db);
   
   res.status(201).json({ 
@@ -960,7 +1043,7 @@ app.post('/api/allocation', authenticateToken, requireRole(['Manager', 'Admin'])
 });
 
 // PUT /api/allocation/:id
-app.put('/api/allocation/:id', authenticateToken, requireRole(['Manager', 'Admin']), (req, res) => {
+app.put('/api/allocation/:id', authenticateToken, requireRole(['Manager', 'Admin']), (req: any, res) => {
   const db = loadDatabase();
   const idx = db.allocations.findIndex(a => a.id === req.params.id);
   if (idx === -1) {
@@ -987,9 +1070,9 @@ app.put('/api/allocation/:id', authenticateToken, requireRole(['Manager', 'Admin
   current.totalAllocated = current.openingBalance + current.autoRefill1 + current.autoRefill2 + current.autoRefill3 + current.ecManual1 + current.ecManual2;
   
   db.allocations[idx] = current;
-  saveDatabase(db);
-  
   const fscUser = db.users.find(u => u.id === current.fscId);
+  logAudit(db, req.user, 'UPDATE', 'allocation', `Updated FSC allocation for ${current.date} (FSC: ${fscUser ? fscUser.name : 'Unknown FSC'}, Amount: ₹${current.totalAllocated})`);
+  saveDatabase(db);
   res.json({ 
     success: true, 
     allocation: {
@@ -1000,13 +1083,15 @@ app.put('/api/allocation/:id', authenticateToken, requireRole(['Manager', 'Admin
 });
 
 // DELETE /api/allocation/:id
-app.delete('/api/allocation/:id', authenticateToken, requireRole(['Manager', 'Admin']), (req, res) => {
+app.delete('/api/allocation/:id', authenticateToken, requireRole(['Manager', 'Admin']), (req: any, res) => {
   const db = loadDatabase();
-  const exists = db.allocations.some(a => a.id === req.params.id);
-  if (!exists) {
+  const allocation = db.allocations.find(a => a.id === req.params.id);
+  if (!allocation) {
     return res.status(404).json({ success: false, error: 'Allocation not found' });
   }
   
+  const fscUser = db.users.find(u => u.id === allocation.fscId);
+  logAudit(db, req.user, 'DELETE', 'allocation', `Deleted FSC allocation for ${allocation.date} (FSC: ${fscUser ? fscUser.name : 'Unknown FSC'})`);
   db.allocations = db.allocations.filter(a => a.id !== req.params.id);
   
   // Set referencing allocations on sales to null
@@ -1026,7 +1111,7 @@ app.get('/api/custom-fields', authenticateToken, (req, res) => {
 });
 
 // POST /api/custom-fields
-app.post('/api/custom-fields', authenticateToken, requireRole(['Admin', 'Manager']), (req, res) => {
+app.post('/api/custom-fields', authenticateToken, requireRole(['Admin', 'Manager']), (req: any, res) => {
   const { name, type, target } = req.body;
   if (!name || !type || !target) {
     return res.status(400).json({ success: false, error: 'Fields name, type, and target are required' });
@@ -1045,13 +1130,14 @@ app.post('/api/custom-fields', authenticateToken, requireRole(['Admin', 'Manager
   };
   
   db.customFieldConfigs.push(newConfig);
+  logAudit(db, req.user, 'CREATE', 'customField', `Created custom field config: "${name}" for "${target}" (Type: ${type})`);
   saveDatabase(db);
   
   res.status(201).json({ success: true, customFieldConfig: newConfig });
 });
 
 // DELETE /api/custom-fields/:id
-app.delete('/api/custom-fields/:id', authenticateToken, requireRole(['Admin', 'Manager']), (req, res) => {
+app.delete('/api/custom-fields/:id', authenticateToken, requireRole(['Admin', 'Manager']), (req: any, res) => {
   const db = loadDatabase();
   if (!db.customFieldConfigs) {
     db.customFieldConfigs = [];
@@ -1064,6 +1150,8 @@ app.delete('/api/custom-fields/:id', authenticateToken, requireRole(['Admin', 'M
   
   const configToDelete = db.customFieldConfigs[idx];
   db.customFieldConfigs.splice(idx, 1);
+  
+  logAudit(db, req.user, 'DELETE', 'customField', `Deleted custom field config: "${configToDelete.name}" associated with "${configToDelete.target}"`);
   
   // Clean up references in daily stocks or allocations
   if (configToDelete.target === 'stock') {
@@ -1228,6 +1316,7 @@ app.post('/api/sale', authenticateToken, (req: any, res) => {
   };
   
   db.sales.push(newSale);
+  logAudit(db, req.user, 'CREATE', 'sale', `Created sales sheet for date ${date} (FSC: ${fscUser.name}, Value: ₹${saleTotal})`);
   saveDatabase(db);
   
   res.status(201).json({ success: true, sale: newSale });
@@ -1278,6 +1367,8 @@ app.put('/api/sale/:id', authenticateToken, (req: any, res) => {
   current.shortAmount = Math.max(0, current.saleTotal - current.saleAmount) + current.previousShort;
   
   db.sales[idx] = current;
+  const fscUser = db.users.find(u => u.id === current.fscId);
+  logAudit(db, req.user, 'UPDATE', 'sale', `Updated sales sheet for date ${current.date} (FSC: ${fscUser ? fscUser.name : 'Unknown FSC'}, Value: ₹${current.saleTotal})`);
   saveDatabase(db);
   
   res.json({ success: true, sale: current });
@@ -1308,6 +1399,8 @@ app.post('/api/sale/:id/submit', authenticateToken, (req: any, res) => {
   current.submittedBy = req.user.id;
   
   db.sales[idx] = current;
+  const fscUser = db.users.find(u => u.id === current.fscId);
+  logAudit(db, req.user, 'SUBMIT', 'sale', `Submitted sales sheet for date ${current.date} (FSC: ${fscUser ? fscUser.name : 'Unknown FSC'}, Value: ₹${current.saleTotal})`);
   saveDatabase(db);
   
   res.json({ success: true, sale: current });
@@ -1339,6 +1432,8 @@ app.post('/api/sale/:id/review', authenticateToken, requireRole(['Manager', 'App
   current.reviewedBy = req.user.id;
   
   db.sales[idx] = current;
+  const fscUserForReview = db.users.find(u => u.id === current.fscId);
+  logAudit(db, req.user, action === 'approve' ? 'APPROVE' : 'REJECT', 'sale', `${action === 'approve' ? 'Approved' : 'Rejected'} sales sheet for date ${current.date} (FSC: ${fscUserForReview ? fscUserForReview.name : 'Unknown FSC'}, Value: ₹${current.saleTotal})`);
   saveDatabase(db);
   
   res.json({ success: true, sale: current });
@@ -1364,6 +1459,8 @@ app.delete('/api/sale/:id', authenticateToken, (req: any, res) => {
     return res.status(400).json({ success: false, error: 'Approved sale entries cannot be deleted' });
   }
   
+  const fscUserForDelete = db.users.find(u => u.id === current.fscId);
+  logAudit(db, req.user, 'DELETE', 'sale', `Deleted sales sheet entry for date ${current.date} (FSC: ${fscUserForDelete ? fscUserForDelete.name : 'Unknown FSC'}, Status: ${current.status})`);
   db.sales = db.sales.filter(s => s.id !== req.params.id);
   saveDatabase(db);
   
@@ -1452,6 +1549,73 @@ app.get('/api/report/approved', authenticateToken, requireRole(['Manager', 'Admi
   });
   
   res.json({ success: true, sales: results });
+});
+
+
+// 8. ROLE PERMISSIONS ENDPOINTS
+
+// GET /api/role-permissions
+app.get('/api/role-permissions', authenticateToken, (req, res) => {
+  const db = loadDatabase();
+  if (!db.rolePermissions || db.rolePermissions.length === 0) {
+    db.rolePermissions = [
+      {
+        role: 'Admin',
+        allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit']
+      },
+      {
+        role: 'Manager',
+        allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit']
+      },
+      {
+        role: 'Approver',
+        allowedTabs: ['dashboard', 'sales', 'reports']
+      },
+      {
+        role: 'FSC',
+        allowedTabs: ['dashboard', 'sales']
+      }
+    ];
+    saveDatabase(db);
+  }
+  res.json({ success: true, permissions: db.rolePermissions });
+});
+
+// PUT /api/role-permissions (Admin Only)
+app.post('/api/role-permissions', authenticateToken, requireRole(['Admin']), (req: any, res) => {
+  const { permissions } = req.body;
+  if (!permissions || !Array.isArray(permissions)) {
+    return res.status(400).json({ success: false, error: 'Permissions must be an array' });
+  }
+  const db = loadDatabase();
+  db.rolePermissions = permissions;
+  logAudit(db, req.user, 'UPDATE', 'rolePermission', `Updated role access permissions matrix.`);
+  saveDatabase(db);
+  res.json({ success: true, permissions });
+});
+
+// Support both PUT and POST for convenience
+app.put('/api/role-permissions', authenticateToken, requireRole(['Admin']), (req: any, res) => {
+  const { permissions } = req.body;
+  if (!permissions || !Array.isArray(permissions)) {
+    return res.status(400).json({ success: false, error: 'Permissions must be an array' });
+  }
+  const db = loadDatabase();
+  db.rolePermissions = permissions;
+  logAudit(db, req.user, 'UPDATE', 'rolePermission', `Updated role access permissions matrix.`);
+  saveDatabase(db);
+  res.json({ success: true, permissions });
+});
+
+
+// 9. AUDIT LOGS ENDPOINTS
+
+// GET /api/audit-logs (Admin and Manager only)
+app.get('/api/audit-logs', authenticateToken, requireRole(['Admin', 'Manager']), (req, res) => {
+  const db = loadDatabase();
+  const logs = db.auditLogs || [];
+  const sortedLogs = [...logs].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  res.json({ success: true, auditLogs: sortedLogs });
 });
 
 

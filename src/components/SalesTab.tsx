@@ -167,6 +167,82 @@ export const SalesTab: React.FC<SalesTabProps> = ({
         </span>
       )
     },
+    {
+      key: 'openingBalance',
+      label: 'Opening Balance',
+      type: 'currency',
+      sortable: true,
+      render: (r) => <span className="text-slate-600 font-semibold">₹{(r.openingBalance || 0).toLocaleString('en-IN')}</span>
+    },
+    {
+      key: 'refillsAndClaims',
+      label: 'Allocated Refills',
+      type: 'currency',
+      sortable: true,
+      render: (r) => {
+        const totalRefills = (r.autoRefill1 || 0) + (r.autoRefill2 || 0) + (r.autoRefill3 || 0);
+        return (
+          <div className="text-[11px] leading-tight min-w-[120px]">
+            <span className="font-semibold text-slate-700">₹{totalRefills.toLocaleString('en-IN')}</span>
+            <p className="text-[9px] text-slate-400 mt-0.5">
+              R1: ₹{(r.autoRefill1 || 0).toLocaleString('en-IN')} | R2: ₹{(r.autoRefill2 || 0).toLocaleString('en-IN')} | R3: ₹{(r.autoRefill3 || 0).toLocaleString('en-IN')}
+            </p>
+          </div>
+        );
+      }
+    },
+    {
+      key: 'manualEc',
+      label: 'Manual EasyCharge',
+      type: 'currency',
+      sortable: true,
+      render: (r) => {
+        const totalEc = (r.ecManual1 || 0) + (r.ecManual2 || 0);
+        return (
+          <div className="text-[11px] leading-tight min-w-[100px]">
+            <span className="font-semibold text-slate-700">₹{totalEc.toLocaleString('en-IN')}</span>
+            <p className="text-[9px] text-slate-400 mt-0.5">
+              EC1: ₹{(r.ecManual1 || 0).toLocaleString('en-IN')} | EC2: ₹{(r.ecManual2 || 0).toLocaleString('en-IN')}
+            </p>
+          </div>
+        );
+      }
+    },
+    {
+      key: 'closingBalance',
+      label: 'Closing Balance',
+      type: 'currency',
+      sortable: true,
+      render: (r) => <span className="text-slate-600 font-semibold">₹{(r.closingBalance || 0).toLocaleString('en-IN')}</span>
+    },
+    {
+      key: 'previousShort',
+      label: 'Prev Shortages',
+      type: 'currency',
+      sortable: true,
+      render: (r) => <span className="text-slate-600 font-semibold">₹{(r.previousShort || 0).toLocaleString('en-IN')}</span>
+    },
+    {
+      key: 'simDetails',
+      label: 'SIMs (Op / Sold / Cl)',
+      type: 'number',
+      sortable: true,
+      render: (r) => (
+        <div className="text-[11px] leading-tight min-w-[110px]">
+          <span className="font-semibold text-slate-800">Sold: {r.sim || 0} SIMs</span>
+          <p className="text-[9px] text-slate-400 mt-0.5">
+            Op: {r.openingSim || 0} | Cl: {r.closingSim || 0}
+          </p>
+        </div>
+      )
+    },
+    {
+      key: 'remarks',
+      label: 'Remarks / Notes',
+      type: 'string',
+      sortable: false,
+      render: (r) => <span className="text-slate-500 font-normal italic max-w-[150px] truncate block" title={r.remarks || ''}>{r.remarks || '-'}</span>
+    },
     { 
       key: 'saleTotal', 
       label: 'Credit Sales Collected', 

@@ -14,7 +14,7 @@
       "email": "manager@airtel.com",
       "name": "Distribution Manager",
       "role": "Manager",
-      "passwordHash": "d77b836466c391967a38330188601616:bba70d364a63b4ed066e6b9b59a33b445d92b0caa5f06dad6fbbcde91ac656f39e8ff87d55333bc8f3288aa4cd2719b7814ca00c07e2e2fcaca552e9b805c026",
+      "passwordHash": "7c5c2b129fcda576c4a1b386a5632cb9:81e90efd561256a3928159c52ed57028d6f882616fcfcc920c4cd3b1d99d26c51c45897a45132c50cd5e48b452a5289aa6a3642f2c9825b21e786f38501db91c",
       "createdAt": "2026-07-06T15:12:58.080Z",
       "photo": null
     },
@@ -242,5 +242,61 @@
       "reviewedBy": null
     }
   ],
-  "customFieldConfigs": []
+  "customFieldConfigs": [],
+  "rolePermissions": [
+    {
+      "role": "Admin",
+      "allowedTabs": [
+        "dashboard",
+        "dailyStock",
+        "allocations",
+        "sales",
+        "reports",
+        "users",
+        "user-roles",
+        "masters-fsc",
+        "masters-stock",
+        "audit"
+      ]
+    },
+    {
+      "role": "Manager",
+      "allowedTabs": [
+        "dashboard",
+        "dailyStock",
+        "allocations",
+        "sales",
+        "reports",
+        "audit"
+      ]
+    },
+    {
+      "role": "Approver",
+      "allowedTabs": [
+        "dashboard",
+        "sales",
+        "reports"
+      ]
+    },
+    {
+      "role": "FSC",
+      "allowedTabs": [
+        "dashboard",
+        "sales"
+      ]
+    }
+  ],
+  "auditLogs": [
+    {
+      "id": "audit-12b62913d76de478",
+      "timestamp": "2026-07-07T09:15:04.751Z",
+      "userId": "user-admin-id",
+      "userEmail": "admin@airtel.com",
+      "userName": "Airtel Administrator",
+      "userRole": "Admin",
+      "action": "UPDATE",
+      "targetType": "rolePermission",
+      "details": "Updated role access permissions matrix."
+    }
+  ]
 }

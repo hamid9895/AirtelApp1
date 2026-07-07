@@ -8,6 +8,7 @@ interface User {
   role: 'Admin' | 'Manager' | 'Approver' | 'FSC';
   passwordHash: string; // "salt:hash" or just plain text for client-side easy match
   createdAt: string;
+  photo?: string | null;
 }
 
 interface DailyStock {
@@ -74,7 +75,9 @@ const STORAGE_KEYS = {
   USERS: 'airtel_mock_users',
   STOCKS: 'airtel_mock_stocks',
   ALLOCATIONS: 'airtel_mock_allocations',
-  SALES: 'airtel_mock_sales'
+  SALES: 'airtel_mock_sales',
+  ROLE_PERMISSIONS: 'airtel_mock_role_permissions',
+  AUDIT_LOGS: 'airtel_mock_audit_logs'
 };
 
 // Seed default accounts if they don't exist
@@ -90,7 +93,8 @@ export function initializeMockDatabase() {
         name: 'Airtel Administrator (Standalone)',
         role: 'Admin',
         passwordHash: 'admin123',
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        photo: null
       },
       {
         id: 'user-manager-id',
@@ -98,7 +102,8 @@ export function initializeMockDatabase() {
         name: 'Distribution Manager (Standalone)',
         role: 'Manager',
         passwordHash: 'manager123',
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        photo: null
       },
       {
         id: 'user-approver-id',
@@ -106,7 +111,8 @@ export function initializeMockDatabase() {
         name: 'Regional Approver (Standalone)',
         role: 'Approver',
         passwordHash: 'approver123',
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        photo: null
       },
       {
         id: 'user-fsc-rajesh',
@@ -114,7 +120,8 @@ export function initializeMockDatabase() {
         name: 'Rajesh Kumar (FSC Standalone)',
         role: 'FSC',
         passwordHash: 'fsc123',
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        photo: null
       },
       {
         id: 'user-fsc-sita',
@@ -122,7 +129,8 @@ export function initializeMockDatabase() {
         name: 'Sita Verma (FSC Standalone)',
         role: 'FSC',
         passwordHash: 'fsc123',
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        photo: null
       }
     ];
     localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
@@ -291,6 +299,49 @@ export function initializeMockDatabase() {
     ];
     localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify(sales));
   }
+
+  if (!localStorage.getItem(STORAGE_KEYS.ROLE_PERMISSIONS)) {
+    const permissions = [
+      {
+        role: 'Admin',
+        allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit']
+      },
+      {
+        role: 'Manager',
+        allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit']
+      },
+      {
+        role: 'Approver',
+        allowedTabs: ['dashboard', 'sales', 'reports']
+      },
+      {
+        role: 'FSC',
+        allowedTabs: ['dashboard', 'sales']
+      }
+    ];
+    localStorage.setItem(STORAGE_KEYS.ROLE_PERMISSIONS, JSON.stringify(permissions));
+  }
+
+  if (!localStorage.getItem(STORAGE_KEYS.AUDIT_LOGS)) {
+    localStorage.setItem(STORAGE_KEYS.AUDIT_LOGS, JSON.stringify([]));
+  }
+}
+
+function logMockAudit(user: any, action: string, targetType: string, details: string) {
+  const logs = getMockList<any>(STORAGE_KEYS.AUDIT_LOGS);
+  const newLog = {
+    id: `audit-${Math.random().toString(36).substring(2, 11)}`,
+    timestamp: new Date().toISOString(),
+    userId: user ? user.id : 'system',
+    userEmail: user ? user.email : 'system@airtel.com',
+    userName: user ? user.name : 'System Process',
+    userRole: user ? user.role : 'System',
+    action,
+    targetType,
+    details
+  };
+  logs.push(newLog);
+  saveMockList(STORAGE_KEYS.AUDIT_LOGS, logs);
 }
 
 // Helper to access mock lists
@@ -372,7 +423,8 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
         id: user.id,
         email: user.email,
         name: user.name,
-        role: user.role
+        role: user.role,
+        photo: user.photo || null
       }
     });
   }
@@ -387,7 +439,39 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
         id: user.id,
         email: user.email,
         name: user.name,
-        role: user.role
+        role: user.role,
+        photo: user.photo || null
+      }
+    });
+  }
+
+  // PUT PROFILE (Users can update their own details/photo)
+  if (cleanUrl === '/api/auth/profile' && method === 'PUT') {
+    const user = getUserFromToken(headers);
+    if (!user) return mockResponse({ success: false, error: 'Authentication required' }, 401);
+
+    const users = getMockList<User>(STORAGE_KEYS.USERS);
+    const idx = users.findIndex(u => u.id === user.id);
+    if (idx === -1) return mockResponse({ success: false, error: 'User not found' }, 404);
+
+    const { name, password, photo } = body;
+    const targetUser = users[idx];
+
+    if (name) targetUser.name = name;
+    if (photo !== undefined) targetUser.photo = photo;
+    if (password) targetUser.passwordHash = password;
+
+    users[idx] = targetUser;
+    saveMockList(STORAGE_KEYS.USERS, users);
+
+    return mockResponse({
+      success: true,
+      user: {
+        id: targetUser.id,
+        email: targetUser.email,
+        name: targetUser.name,
+        role: targetUser.role,
+        photo: targetUser.photo || null
       }
     });
   }
@@ -402,7 +486,8 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
       id: u.id,
       email: u.email,
       name: u.name,
-      role: u.role
+      role: u.role,
+      photo: u.photo || null
     }));
     return mockResponse({ success: true, users });
   }
@@ -413,7 +498,7 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
       return mockResponse({ success: false, error: 'Administrator role required to create users' }, 403);
     }
 
-    const { email, name, role, password } = body;
+    const { email, name, role, password, photo } = body;
     const users = getMockList<User>(STORAGE_KEYS.USERS);
     if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
       return mockResponse({ success: false, error: 'Email address is already in use' }, 400);
@@ -425,7 +510,8 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
       name,
       role,
       passwordHash: password,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      photo: photo || null
     };
 
     users.push(newUser);
@@ -437,7 +523,8 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
         id: newUser.id,
         email: newUser.email,
         name: newUser.name,
-        role: newUser.role
+        role: newUser.role,
+        photo: newUser.photo || null
       }
     }, 211);
   }
@@ -454,7 +541,7 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
     const idx = users.findIndex(u => u.id === userId);
     if (idx === -1) return mockResponse({ success: false, error: 'User not found' }, 404);
 
-    const { name, role, password, email } = body;
+    const { name, role, password, email, photo } = body;
     const targetUser = users[idx];
 
     if (email && email.toLowerCase() !== targetUser.email.toLowerCase()) {
@@ -467,6 +554,7 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
 
     if (name) targetUser.name = name;
     if (role) targetUser.role = role;
+    if (photo !== undefined) targetUser.photo = photo;
     if (password) targetUser.passwordHash = password; // raw temporary match for mock
 
     users[idx] = targetUser;
@@ -478,7 +566,8 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
         id: targetUser.id,
         email: targetUser.email,
         name: targetUser.name,
-        role: targetUser.role
+        role: targetUser.role,
+        photo: targetUser.photo || null
       }
     });
   }
@@ -916,6 +1005,62 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
     });
 
     return mockResponse({ success: true, summaries });
+  }
+
+  // 8. ROLE PERMISSIONS
+  if (cleanUrl === '/api/role-permissions') {
+    const user = getUserFromToken(headers);
+    if (!user) return mockResponse({ success: false, error: 'Authentication required' }, 401);
+
+    if (method === 'GET') {
+      let permissions = getMockList<any>(STORAGE_KEYS.ROLE_PERMISSIONS);
+      if (!permissions || permissions.length === 0) {
+        permissions = [
+          {
+            role: 'Admin',
+            allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit']
+          },
+          {
+            role: 'Manager',
+            allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit']
+          },
+          {
+            role: 'Approver',
+            allowedTabs: ['dashboard', 'sales', 'reports']
+          },
+          {
+            role: 'FSC',
+            allowedTabs: ['dashboard', 'sales']
+          }
+        ];
+        saveMockList(STORAGE_KEYS.ROLE_PERMISSIONS, permissions);
+      }
+      return mockResponse({ success: true, permissions });
+    }
+
+    if (method === 'PUT' || method === 'POST') {
+      if (user.role !== 'Admin') {
+        return mockResponse({ success: false, error: 'Admin role is required' }, 403);
+      }
+      const { permissions } = body;
+      if (!permissions || !Array.isArray(permissions)) {
+        return mockResponse({ success: false, error: 'Permissions must be an array' }, 400);
+      }
+      saveMockList(STORAGE_KEYS.ROLE_PERMISSIONS, permissions);
+      logMockAudit(user, 'UPDATE', 'rolePermission', `Updated role access permissions matrix.`);
+      return mockResponse({ success: true, permissions });
+    }
+  }
+
+  // 9. AUDIT LOGS
+  if (cleanUrl === '/api/audit-logs' && method === 'GET') {
+    const user = getUserFromToken(headers);
+    if (!user || !['Admin', 'Manager'].includes(user.role)) {
+      return mockResponse({ success: false, error: 'Privileged role is required' }, 403);
+    }
+    const logs = getMockList<any>(STORAGE_KEYS.AUDIT_LOGS);
+    const sortedLogs = [...logs].sort((a: any, b: any) => b.timestamp.localeCompare(a.timestamp));
+    return mockResponse({ success: true, auditLogs: sortedLogs });
   }
 
   // 404 FALLBACK

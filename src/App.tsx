@@ -5,20 +5,23 @@ import { handleMockApiRequest, initializeMockDatabase } from './mockApi';
 // (Enables static deployments like Vercel, Netlify, or GitHub Pages when backend is offline)
 initializeMockDatabase();
 
+const originalFetch = window.fetch;
+
 const appFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as Request).url;
   if (url.startsWith('/api')) {
     try {
-      const response = await window.fetch(input, init);
+      const response = await originalFetch(input, init);
       return response;
     } catch (err) {
       console.warn(`[Airtel Distro Standalone] Server offline. Accessing local mock storage for: ${url}`, err);
       return handleMockApiRequest(url, init);
     }
   }
-  return window.fetch(input, init);
+  return originalFetch(input, init);
 };
 
+window.fetch = appFetch;
 const fetch = appFetch;
 
 
@@ -28,7 +31,7 @@ import { AlertCircle, CheckCircle, RefreshCw, Sparkles } from 'lucide-react';
 // Import Types and Subcomponents
 import { UserDto, DailyStock, Allocation, Sale, ReportSummary, CustomFieldConfig } from './types';
 import { LoginView } from './components/LoginView';
-import { Header } from './components/Header';
+import { Sidebar } from './components/Sidebar';
 import { DashboardTab } from './components/DashboardTab';
 import { DailyStockTab } from './components/DailyStockTab';
 import { AllocationsTab } from './components/AllocationsTab';
@@ -36,6 +39,8 @@ import { SalesTab } from './components/SalesTab';
 import { ReportsTab } from './components/ReportsTab';
 import { UsersTab } from './components/UsersTab';
 import { MastersTab } from './components/MastersTab';
+import { UserRolesTab } from './components/UserRolesTab';
+import { AuditLogTab } from './components/AuditLogTab';
 
 export default function App() {
   // --- CORE STATE MANAGERS ---
@@ -51,11 +56,11 @@ export default function App() {
   const [isStandaloneMode, setIsStandaloneMode] = useState<boolean>(false);
 
   // Auth form controllers
-  const [loginEmail, setLoginEmail] = useState<string>('manager@airtel.com');
-  const [loginPassword, setLoginPassword] = useState<string>('manager123');
+  const [loginEmail, setLoginEmail] = useState<string>('');
+  const [loginPassword, setLoginPassword] = useState<string>('');
 
   // Navigation controller
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'dailyStock' | 'allocations' | 'sales' | 'reports' | 'users' | 'masters-fsc' | 'masters-stock'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'dailyStock' | 'allocations' | 'sales' | 'reports' | 'users' | 'masters-fsc' | 'masters-stock' | 'user-roles' | 'audit'>('dashboard');
 
   // Primary Data Stores
   const [dailyStocks, setDailyStocks] = useState<DailyStock[]>([]);
@@ -63,6 +68,7 @@ export default function App() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [allUsers, setAllUsers] = useState<UserDto[]>([]);
   const [customFieldConfigs, setCustomFieldConfigs] = useState<CustomFieldConfig[]>([]);
+  const [rolePermissions, setRolePermissions] = useState<any[]>([]);
 
   // Filtering & Query States
   const [globalSearch, setGlobalSearch] = useState<string>('');
@@ -161,6 +167,40 @@ export default function App() {
       fetchCurrentUser();
     }
   }, [token]);
+
+  // --- ROLE-BASED ACCESS CONTROL (RBAC) CONTROLLERS ---
+
+  // Calculate dynamic allowed tabs with hardcoded fallback support
+  const allowedTabsForUser = React.useMemo(() => {
+    if (!user) return [];
+    if (user.role === 'Admin') {
+      return ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'masters-fsc', 'masters-stock', 'user-roles', 'audit'];
+    }
+    const matchingPermission = rolePermissions.find(p => p.role === user.role);
+    if (matchingPermission) {
+      return matchingPermission.allowedTabs;
+    }
+    
+    // Fallback safety values before live API data is parsed
+    if (user.role === 'Manager') {
+      return ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'masters-fsc', 'masters-stock', 'audit'];
+    }
+    if (user.role === 'Approver') {
+      return ['dashboard', 'sales', 'reports'];
+    }
+    // Default fallback is FSC
+    return ['dashboard', 'sales'];
+  }, [user, rolePermissions]);
+
+  // Restrict screen entry dynamically to allowed items only
+  useEffect(() => {
+    if (user && allowedTabsForUser.length > 0) {
+      if (!allowedTabsForUser.includes(activeTab)) {
+        setActiveTab('dashboard');
+      }
+    }
+  }, [user, activeTab, allowedTabsForUser]);
+
 
   // Load backend statistics and logs upon tab transition
   useEffect(() => {
@@ -344,6 +384,13 @@ export default function App() {
       const configsData = await configsRes.json();
       if (configsData.success) {
         setCustomFieldConfigs(configsData.customFieldConfigs);
+      }
+
+      // Retrieve role-permissions configurations
+      const permissionsRes = await fetch('/api/role-permissions', { headers: { 'Authorization': `Bearer ${token}` } });
+      const permissionsData = await permissionsRes.json();
+      if (permissionsData.success) {
+        setRolePermissions(permissionsData.permissions || []);
       }
 
       // Trigger automatic report compilation on tab load
@@ -849,45 +896,49 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col selection:bg-[#EE1D23]/10 selection:text-red-950 font-sans">
+    <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row selection:bg-[#EE1D23]/10 selection:text-red-950 font-sans">
       
-      {/* HEADER NAVIGATION BLOCK */}
-      <Header
+      {/* SIDEBAR NAVIGATION BLOCK */}
+      <Sidebar
         user={user}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         isStandaloneMode={isStandaloneMode}
         onLogOut={handleLogOut}
+        allowedTabs={allowedTabsForUser}
       />
 
-      {/* SYSTEM DYNAMIC BANNER OVERLAYS */}
-      {(errorMsg || successMsg) && (
-        <div className="bg-white px-8 pt-4 shrink-0 flex flex-col gap-2">
-          {errorMsg && (
-            <div className="p-3.5 bg-rose-50 border border-rose-100 rounded-2xl text-[11px] font-semibold text-rose-800 flex items-center gap-2 animate-fade-in">
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-              <span>{errorMsg}</span>
-            </div>
-          )}
-          {successMsg && (
-            <div className="p-3.5 bg-emerald-50 border border-emerald-100 rounded-2xl text-[11px] font-semibold text-emerald-800 flex items-center gap-2 animate-fade-in">
-              <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>{successMsg}</span>
-            </div>
-          )}
-        </div>
-      )}
+      {/* RIGHT SIDE AREA CONTAINER */}
+      <div className="flex-grow flex flex-col min-w-0 h-screen overflow-hidden">
 
-      {/* PRIMARY DESKTOP WORKSPACE LAYOUT */}
-      <main className="flex-grow p-8 overflow-y-auto">
-        
-        {/* Loading spinner overlay */}
-        {loading && (
-          <div className="flex items-center gap-2 text-slate-400 font-bold text-xs tracking-wider mb-6">
-            <RefreshCw className="w-4 h-4 animate-spin text-[#EE1D23]" />
-            Telemetry synchronization in progress...
+        {/* SYSTEM DYNAMIC BANNER OVERLAYS */}
+        {(errorMsg || successMsg) && (
+          <div className="bg-white px-8 pt-4 shrink-0 flex flex-col gap-2">
+            {errorMsg && (
+              <div className="p-3.5 bg-rose-50 border border-rose-100 rounded-2xl text-[11px] font-semibold text-rose-800 flex items-center gap-2 animate-fade-in">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{errorMsg}</span>
+              </div>
+            )}
+            {successMsg && (
+              <div className="p-3.5 bg-emerald-50 border border-emerald-100 rounded-2xl text-[11px] font-semibold text-emerald-800 flex items-center gap-2 animate-fade-in">
+                <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{successMsg}</span>
+              </div>
+            )}
           </div>
         )}
+
+        {/* PRIMARY DESKTOP WORKSPACE LAYOUT */}
+        <main className="flex-grow p-8 overflow-y-auto">
+          
+          {/* Loading spinner overlay */}
+          {loading && (
+            <div className="flex items-center gap-2 text-slate-400 font-bold text-xs tracking-wider mb-6">
+              <RefreshCw className="w-4 h-4 animate-spin text-[#EE1D23]" />
+              Telemetry synchronization in progress...
+            </div>
+          )}
 
         {/* Tab 1: Dashboard overview stats */}
         {activeTab === 'dashboard' && (
@@ -1071,6 +1122,21 @@ export default function App() {
           />
         )}
 
+        {/* Tab 9: User Roles access configurations (Admin Only) */}
+        {activeTab === 'user-roles' && user.role === 'Admin' && (
+          <UserRolesTab
+            token={token}
+            onPermissionsUpdated={loadTabContent}
+          />
+        )}
+
+        {/* Tab 10: Transaction Audit logs (Admin or Manager Only) */}
+        {activeTab === 'audit' && (user.role === 'Admin' || user.role === 'Manager') && (
+          <AuditLogTab
+            token={token}
+          />
+        )}
+
       </main>
 
       {/* SYSTEM BOTTOM STATUS BAR */}
@@ -1088,6 +1154,7 @@ export default function App() {
         <p className="font-mono">Sync Reference Status: OK</p>
       </footer>
 
+      </div> {/* Close of RIGHT SIDE AREA CONTAINER */}
     </div>
   );
 }
