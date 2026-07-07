@@ -137,167 +137,15 @@ export function initializeMockDatabase() {
   }
 
   if (!localStorage.getItem(STORAGE_KEYS.STOCKS)) {
-    const stocks: DailyStock[] = [
-      {
-        id: 'stock-yesterday',
-        date: yesterdayStr,
-        openingAmount: 140000,
-        openingSim: 450,
-        flexy: 95000,
-        flexyClaim1: 18000,
-        flexyClaim2: 12000,
-        sim: 300,
-        createdAt: new Date().toISOString(),
-        createdBy: 'user-manager-id'
-      },
-      {
-        id: 'stock-today',
-        date: todayStr,
-        openingAmount: 152805,
-        openingSim: 500,
-        flexy: 105000,
-        flexyClaim1: 22000,
-        flexyClaim2: 15800,
-        sim: 350,
-        createdAt: new Date().toISOString(),
-        createdBy: 'user-manager-id'
-      }
-    ];
-    localStorage.setItem(STORAGE_KEYS.STOCKS, JSON.stringify(stocks));
+    localStorage.setItem(STORAGE_KEYS.STOCKS, JSON.stringify([]));
   }
 
   if (!localStorage.getItem(STORAGE_KEYS.ALLOCATIONS)) {
-    const allocations: Allocation[] = [
-      {
-        id: 'alloc-rajesh-yesterday',
-        date: yesterdayStr,
-        fscId: 'user-fsc-rajesh',
-        openingBalance: 18000,
-        openingSim: 45,
-        autoRefill1: 28000,
-        autoRefill2: 18000,
-        autoRefill3: 12000,
-        ecManual1: 4000,
-        ecManual2: 4000,
-        sim: 35,
-        totalAllocated: 88000,
-        createdAt: new Date().toISOString(),
-        createdBy: 'user-manager-id'
-      },
-      {
-        id: 'alloc-sita-yesterday',
-        date: yesterdayStr,
-        fscId: 'user-fsc-sita',
-        openingBalance: 12000,
-        openingSim: 35,
-        autoRefill1: 22000,
-        autoRefill2: 12000,
-        autoRefill3: 8000,
-        ecManual1: 3000,
-        ecManual2: 1000,
-        sim: 25,
-        totalAllocated: 58000,
-        createdAt: new Date().toISOString(),
-        createdBy: 'user-manager-id'
-      },
-      {
-        id: 'alloc-rajesh-today',
-        date: todayStr,
-        fscId: 'user-fsc-rajesh',
-        openingBalance: 20000,
-        openingSim: 50,
-        autoRefill1: 30000,
-        autoRefill2: 20000,
-        autoRefill3: 15000,
-        ecManual1: 5000,
-        ecManual2: 5000,
-        sim: 40,
-        totalAllocated: 95000,
-        createdAt: new Date().toISOString(),
-        createdBy: 'user-manager-id'
-      },
-      {
-        id: 'alloc-sita-today',
-        date: todayStr,
-        fscId: 'user-fsc-sita',
-        openingBalance: 15000,
-        openingSim: 40,
-        autoRefill1: 25000,
-        autoRefill2: 15000,
-        autoRefill3: 10000,
-        ecManual1: 4000,
-        ecManual2: 2000,
-        sim: 30,
-        totalAllocated: 71000,
-        createdAt: new Date().toISOString(),
-        createdBy: 'user-manager-id'
-      }
-    ];
-    localStorage.setItem(STORAGE_KEYS.ALLOCATIONS, JSON.stringify(allocations));
+    localStorage.setItem(STORAGE_KEYS.ALLOCATIONS, JSON.stringify([]));
   }
 
   if (!localStorage.getItem(STORAGE_KEYS.SALES)) {
-    const sales: Sale[] = [
-      {
-        id: 'sale-rajesh-yesterday',
-        date: yesterdayStr,
-        fscId: 'user-fsc-rajesh',
-        allocationId: 'alloc-rajesh-yesterday',
-        openingBalance: 18000,
-        autoRefill1: 28000,
-        autoRefill2: 18000,
-        autoRefill3: 12000,
-        ecManual1: 4000,
-        ecManual2: 4000,
-        closingBalance: 3200,
-        previousShort: 0,
-        saleTotal: 77200,
-        saleAmount: 77200,
-        shortAmount: 0,
-        openingSim: 45,
-        sim: 32,
-        closingSim: 13,
-        status: 'Approved',
-        remarks: 'All cash collected and matched',
-        reviewNote: 'Verified with bank deposit confirmation',
-        createdAt: new Date().toISOString(),
-        submittedAt: new Date().toISOString(),
-        reviewedAt: new Date().toISOString(),
-        createdBy: 'user-fsc-rajesh',
-        submittedBy: 'user-fsc-rajesh',
-        reviewedBy: 'user-approver-id'
-      },
-      {
-        id: 'sale-sita-yesterday',
-        date: yesterdayStr,
-        fscId: 'user-fsc-sita',
-        allocationId: 'alloc-sita-yesterday',
-        openingBalance: 12000,
-        autoRefill1: 22000,
-        autoRefill2: 12000,
-        autoRefill3: 8000,
-        ecManual1: 3000,
-        ecManual2: 1000,
-        closingBalance: 1500,
-        previousShort: 500,
-        saleTotal: 56500,
-        saleAmount: 56000,
-        shortAmount: 500,
-        openingSim: 35,
-        sim: 28,
-        closingSim: 7,
-        status: 'Pending',
-        remarks: 'Short of ₹500. Will settle tomorrow.',
-        reviewNote: null,
-        createdAt: new Date().toISOString(),
-        submittedAt: new Date().toISOString(),
-        reviewedAt: null,
-        createdBy: 'user-fsc-sita',
-        submittedBy: 'user-fsc-sita',
-        reviewedBy: null
-      }
-    ];
-    localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify(sales));
+    localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify([]));
   }
 
   if (!localStorage.getItem(STORAGE_KEYS.ROLE_PERMISSIONS)) {
@@ -913,7 +761,7 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
       return mockResponse({ success: false, error: 'Access denied' }, 403);
     }
 
-    if (saleItem.status === 'Approved') {
+    if (saleItem.status === 'Approved' && user.role !== 'Admin') {
       return mockResponse({ success: false, error: 'Approved reports cannot be deleted' }, 400);
     }
 

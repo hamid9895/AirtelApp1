@@ -396,6 +396,14 @@ export const SalesTab: React.FC<SalesTabProps> = ({
             onView={setSelectedSale}
             onEdit={(row) => row.status === 'Draft' ? handleEditTrigger(row) : undefined}
             canEdit={(row) => row.status === 'Draft'} // Only draft reports are editable
+            onDelete={(row) => onDeleteSale(row.id)}
+            canDelete={(row) => {
+              if (user.role === 'Admin') return true;
+              if (user.role === 'FSC') {
+                return row.status === 'Draft' && row.fscId === user.id;
+              }
+              return row.status === 'Draft';
+            }}
             exportFilename="airtel_daily_sales_ledger"
             actionsLabel="Submissions & Audits"
           />

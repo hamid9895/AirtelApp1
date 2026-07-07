@@ -140,11 +140,19 @@ export async function initializeDatabase(): Promise<void> {
 
   if (usePostgres) {
     console.log('[Database] Connecting to PostgreSQL database...');
+    const useSsl = process.env.NODE_ENV === 'production' || 
+                   process.env.DATABASE_URL?.includes('render.com') || 
+                   process.env.DATABASE_URL?.includes('supabase.co') ||
+                   process.env.DATABASE_URL?.includes('supabase.net') ||
+                   process.env.PGSSLMODE === 'require' ||
+                   process.env.PGSSLMODE === 'no-verify';
+    
     pgPool = new pg.Pool({
       connectionString: process.env.DATABASE_URL,
       max: 10,
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
+      connectionTimeoutMillis: 5000, // Slightly longer timeout for remote db connection
+      ssl: useSsl ? { rejectUnauthorized: false } : false,
     });
 
     // Run migrations
@@ -152,6 +160,18 @@ export async function initializeDatabase(): Promise<void> {
     try {
       console.log('[Database] Executing PostgreSQL migrations (001_init.sql)...');
       await client.query(migrationSql);
+      
+      // Ensure "photo" column exists in users table for older PostgreSQL installations
+      const hasPhotoRes = await client.query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name='users' AND column_name='photo'
+      `);
+      if (hasPhotoRes.rowCount === 0) {
+        console.log('[Database] Adding missing "photo" column to users table in PostgreSQL...');
+        await client.query("ALTER TABLE users ADD COLUMN photo TEXT;");
+      }
+
       console.log('[Database] PostgreSQL migration successfully executed.');
     } catch (err) {
       console.error('[Database] Failed to execute PostgreSQL migrations:', err);
@@ -168,6 +188,15 @@ export async function initializeDatabase(): Promise<void> {
     try {
       console.log('[Database] Executing SQLite migrations (001_init.sql)...');
       await sqliteExec(migrationSql);
+      
+      // Ensure "photo" column exists in users table for older SQLite installations
+      const columns = await sqliteAll("PRAGMA table_info(users)");
+      const hasPhoto = columns.some((col: any) => col.name === 'photo');
+      if (!hasPhoto) {
+        console.log('[Database] Adding missing "photo" column to users table in SQLite...');
+        await sqliteExec("ALTER TABLE users ADD COLUMN photo TEXT;");
+      }
+
       console.log('[Database] SQLite migration successfully executed.');
     } catch (err) {
       console.error('[Database] Failed to execute SQLite migrations:', err);
@@ -521,5 +550,73 @@ export async function syncDataToDb(schema: DatabaseSchema): Promise<void> {
       console.error('[Database] Failed to sync data to SQLite:', err);
       throw err;
     }
+  }
+}
+
+/**
+ * Utility to mask sensitive credentials in DATABASE_URL
+ */
+function maskDatabaseUrl(url?: string): string {
+  if (!url) return 'Not Configured';
+  try {
+    const match = url.match(/^postgres(ql)?:\/\/([^:]+):([^@]+)@([^/]+)\/(.+)$/);
+    if (match) {
+      const user = match[2];
+      const host = match[4];
+      const dbname = match[5].split('?')[0]; // strip query params if any
+      return `postgres://${user}:****@${host}/${dbname}`;
+    }
+    return url.replace(/:[^:@]+@/, ':****@');
+  } catch (e) {
+    return 'Invalid Connection String';
+  }
+}
+
+export interface DbStatus {
+  connected: boolean;
+  type: 'PostgreSQL' | 'SQLite';
+  url?: string;
+  error?: string;
+}
+
+/**
+ * Tests the connection to the database and returns connectivity status and details.
+ */
+export async function checkDatabaseConnection(): Promise<DbStatus> {
+  if (usePostgres) {
+    if (!pgPool) {
+      return {
+        connected: false,
+        type: 'PostgreSQL',
+        url: maskDatabaseUrl(process.env.DATABASE_URL),
+        error: 'PostgreSQL Pool not initialized',
+      };
+    }
+    try {
+      const client = await pgPool.connect();
+      try {
+        await client.query('SELECT 1');
+        return {
+          connected: true,
+          type: 'PostgreSQL',
+          url: maskDatabaseUrl(process.env.DATABASE_URL),
+        };
+      } finally {
+        client.release();
+      }
+    } catch (err: any) {
+      return {
+        connected: false,
+        type: 'PostgreSQL',
+        url: maskDatabaseUrl(process.env.DATABASE_URL),
+        error: err.message || 'Unknown PostgreSQL error',
+      };
+    }
+  } else {
+    return {
+      connected: !!sqliteDb,
+      type: 'SQLite',
+      url: 'Local SQLite (database.sqlite)',
+    };
   }
 }

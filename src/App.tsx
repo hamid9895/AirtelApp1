@@ -21,7 +21,7 @@ try {
 import { AlertCircle, CheckCircle, RefreshCw, Sparkles } from 'lucide-react';
 
 // Import Types and Subcomponents
-import { UserDto, DailyStock, Allocation, Sale, ReportSummary, CustomFieldConfig } from './types';
+import { UserDto, DailyStock, Allocation, Sale, ReportSummary, CustomFieldConfig, DbStatusDto } from './types';
 import { LoginView } from './components/LoginView';
 import { Sidebar } from './components/Sidebar';
 import { DashboardTab } from './components/DashboardTab';
@@ -46,6 +46,7 @@ export default function App() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isStandaloneMode, setIsStandaloneMode] = useState<boolean>(false);
+  const [dbStatus, setDbStatus] = useState<DbStatusDto | null>(null);
 
   // Auth form controllers
   const [loginEmail, setLoginEmail] = useState<string>('');
@@ -144,6 +145,9 @@ export default function App() {
       .then((data) => {
         if (data && data.status === 'ok') {
           setIsStandaloneMode(false);
+          if (data.database) {
+            setDbStatus(data.database);
+          }
         } else {
           setIsStandaloneMode(true);
         }
@@ -896,6 +900,7 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         isStandaloneMode={isStandaloneMode}
+        dbStatus={dbStatus}
         onLogOut={handleLogOut}
         allowedTabs={allowedTabsForUser}
       />

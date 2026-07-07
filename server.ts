@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
-import { initializeDatabase, loadDataFromDb, syncDataToDb } from './db';
+import { initializeDatabase, loadDataFromDb, syncDataToDb, checkDatabaseConnection } from './db';
 
 dotenv.config();
 
@@ -216,206 +216,14 @@ function loadDatabase(): DatabaseSchema {
         role: 'Admin',
         passwordHash: hashPassword('admin123'),
         createdAt: new Date().toISOString()
-      },
-      {
-        id: 'user-manager-id',
-        email: 'manager@airtel.com',
-        name: 'Distribution Manager',
-        role: 'Manager',
-        passwordHash: hashPassword('manager123'),
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: 'user-approver-id',
-        email: 'approver@airtel.com',
-        name: 'Regional Approver',
-        role: 'Approver',
-        passwordHash: hashPassword('approver123'),
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: 'user-fsc-rajesh',
-        email: 'rajesh@airtel.com',
-        name: 'Rajesh Kumar (FSC NCR)',
-        role: 'FSC',
-        passwordHash: hashPassword('fsc123'),
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: 'user-fsc-sita',
-        email: 'sita@airtel.com',
-        name: 'Sita Verma (FSC East)',
-        role: 'FSC',
-        passwordHash: hashPassword('fsc123'),
-        createdAt: new Date().toISOString()
       }
     ];
     
     initialDb.users = users;
     
-    // Create Daily Stock seeds (Yesterday and Today)
-    const yesterdayDate = new Date();
-    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-    const yesterdayStr = yesterdayDate.toISOString().split('T')[0];
-    
-    const todayStr = new Date().toISOString().split('T')[0];
-    
-    initialDb.dailyStocks = [
-      {
-        id: 'stock-yesterday',
-        date: yesterdayStr,
-        openingAmount: 140000,
-        openingSim: 450,
-        flexy: 95000,
-        flexyClaim1: 18000,
-        flexyClaim2: 12000,
-        sim: 300,
-        createdAt: new Date().toISOString(),
-        createdBy: 'user-manager-id'
-      },
-      {
-        id: 'stock-today',
-        date: todayStr,
-        openingAmount: 152805,
-        openingSim: 500,
-        flexy: 105000,
-        flexyClaim1: 22000,
-        flexyClaim2: 15800,
-        sim: 350,
-        createdAt: new Date().toISOString(),
-        createdBy: 'user-manager-id'
-      }
-    ];
-    
-    // Create Allocation seeds (Yesterday and Today)
-    initialDb.allocations = [
-      {
-        id: 'alloc-rajesh-yesterday',
-        date: yesterdayStr,
-        fscId: 'user-fsc-rajesh',
-        openingBalance: 18000,
-        openingSim: 45,
-        autoRefill1: 28000,
-        autoRefill2: 18000,
-        autoRefill3: 12000,
-        ecManual1: 4000,
-        ecManual2: 4000,
-        sim: 35,
-        totalAllocated: 88000, // calculated
-        createdAt: new Date().toISOString(),
-        createdBy: 'user-manager-id'
-      },
-      {
-        id: 'alloc-sita-yesterday',
-        date: yesterdayStr,
-        fscId: 'user-fsc-sita',
-        openingBalance: 12000,
-        openingSim: 35,
-        autoRefill1: 22000,
-        autoRefill2: 12000,
-        autoRefill3: 8000,
-        ecManual1: 3000,
-        ecManual2: 1000,
-        sim: 25,
-        totalAllocated: 58000,
-        createdAt: new Date().toISOString(),
-        createdBy: 'user-manager-id'
-      },
-      {
-        id: 'alloc-rajesh-today',
-        date: todayStr,
-        fscId: 'user-fsc-rajesh',
-        openingBalance: 20000,
-        openingSim: 50,
-        autoRefill1: 30000,
-        autoRefill2: 20000,
-        autoRefill3: 15000,
-        ecManual1: 5000,
-        ecManual2: 5000,
-        sim: 40,
-        totalAllocated: 95000,
-        createdAt: new Date().toISOString(),
-        createdBy: 'user-manager-id'
-      },
-      {
-        id: 'alloc-sita-today',
-        date: todayStr,
-        fscId: 'user-fsc-sita',
-        openingBalance: 15000,
-        openingSim: 40,
-        autoRefill1: 25000,
-        autoRefill2: 15000,
-        autoRefill3: 10000,
-        ecManual1: 4000,
-        ecManual2: 2000,
-        sim: 30,
-        totalAllocated: 71000,
-        createdAt: new Date().toISOString(),
-        createdBy: 'user-manager-id'
-      }
-    ];
-    
-    // Create Sales seeds (Yesterday as Approved and Pending)
-    initialDb.sales = [
-      {
-        id: 'sale-rajesh-yesterday',
-        date: yesterdayStr,
-        fscId: 'user-fsc-rajesh',
-        allocationId: 'alloc-rajesh-yesterday',
-        openingBalance: 18000,
-        autoRefill1: 28000,
-        autoRefill2: 18000,
-        autoRefill3: 12000,
-        ecManual1: 4000,
-        ecManual2: 4000,
-        closingBalance: 3200,
-        previousShort: 0,
-        saleTotal: 77200, // Calculated sales
-        saleAmount: 77200,
-        shortAmount: 0,
-        openingSim: 45,
-        sim: 32,
-        closingSim: 13,
-        status: 'Approved',
-        remarks: 'All cash collected and matched',
-        reviewNote: 'Verified with bank deposit confirmation',
-        createdAt: new Date().toISOString(),
-        submittedAt: new Date().toISOString(),
-        reviewedAt: new Date().toISOString(),
-        createdBy: 'user-fsc-rajesh',
-        submittedBy: 'user-fsc-rajesh',
-        reviewedBy: 'user-approver-id'
-      },
-      {
-        id: 'sale-sita-yesterday',
-        date: yesterdayStr,
-        fscId: 'user-fsc-sita',
-        allocationId: 'alloc-sita-yesterday',
-        openingBalance: 12000,
-        autoRefill1: 22000,
-        autoRefill2: 12000,
-        autoRefill3: 8000,
-        ecManual1: 3000,
-        ecManual2: 1000,
-        closingBalance: 1500,
-        previousShort: 500,
-        saleTotal: 56500,
-        saleAmount: 56000,
-        shortAmount: 500,
-        openingSim: 35,
-        sim: 28,
-        closingSim: 7,
-        status: 'Pending',
-        remarks: 'Short of ₹500. Will settle tomorrow.',
-        reviewNote: null,
-        createdAt: new Date().toISOString(),
-        submittedAt: new Date().toISOString(),
-        reviewedAt: null,
-        createdBy: 'user-fsc-sita',
-        submittedBy: 'user-fsc-sita',
-        reviewedBy: null
-      }
-    ];
+    initialDb.dailyStocks = [];
+    initialDb.allocations = [];
+    initialDb.sales = [];
     
     fs.writeFileSync(DATABASE_FILE, JSON.stringify(initialDb, null, 2));
     memoryDb = initialDb;
@@ -511,8 +319,14 @@ function requireRole(roles: string[]) {
 // --- API ROUTES ---
 
 // GET /api/health
-app.get('/api/health', (req, res) => {
-  res.json({ success: true, status: 'ok', server: 'Express' });
+app.get('/api/health', async (req, res) => {
+  const dbStatus = await checkDatabaseConnection();
+  res.json({ 
+    success: true, 
+    status: 'ok', 
+    server: 'Express',
+    database: dbStatus
+  });
 });
 
 // 1. AUTHENTICATION & USERS
@@ -1458,8 +1272,8 @@ app.delete('/api/sale/:id', authenticateToken, (req: any, res) => {
     return res.status(403).json({ success: false, error: 'Access denied' });
   }
   
-  // Enforce BR-06: Approved sales cannot be deleted
-  if (current.status === 'Approved') {
+  // Enforce BR-06: Approved sales cannot be deleted (unless user is Admin)
+  if (current.status === 'Approved' && req.user.role !== 'Admin') {
     return res.status(400).json({ success: false, error: 'Approved sale entries cannot be deleted' });
   }
   
@@ -1627,17 +1441,24 @@ app.get('/api/audit-logs', authenticateToken, requireRole(['Admin', 'Manager']),
 async function initDbAndSeeds() {
   try {
     await initializeDatabase();
+    
+    const flagFile = path.resolve('.db_initialized');
     const dbData = await loadDataFromDb();
-    if (dbData) {
+    
+    if (dbData && fs.existsSync(flagFile)) {
       console.log('[Database] Loaded data successfully from Relational Database.');
       memoryDb = dbData;
-      // Keep database.json updated
+      // Keep database.json updated with latest database changes
       fs.writeFileSync(DATABASE_FILE, JSON.stringify(dbData, null, 2));
     } else {
-      console.log('[Database] Relational Database is empty. Loading default seeds and syncing...');
+      console.log('[Database] Performing a clean database reset & sync to Relational Database...');
       const seeded = loadDatabase();
       await syncDataToDb(seeded);
-      console.log('[Database] Successfully synced default seed data to Relational Database.');
+      
+      // Write the flag file to prevent future automatic resets
+      fs.writeFileSync(flagFile, 'true');
+      console.log('[Database] Successfully initialized Relational Database with clean seed.');
+      memoryDb = seeded;
     }
   } catch (err) {
     console.error('[Database] Failed to initialize database, falling back to local file:', err);
