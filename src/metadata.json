@@ -1,6 +1,0 @@
-{
-  "name": "Airtel Stock Management App",
-  "description": "An internal web application used by Airtel distribution staff to manage daily stock, allocate airtime and SIM stock, record daily sales, and produce financial reports.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

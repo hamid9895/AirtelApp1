@@ -92,7 +92,7 @@ export interface DatabaseSchema {
 
 let pgPool: pg.Pool | null = null;
 let sqliteDb: any = null;
-const usePostgres = !!process.env.DATABASE_URL;
+const usePostgres = true;
 
 export function getDatabaseType(): 'PostgreSQL' | 'SQLite' {
   return usePostgres ? 'PostgreSQL' : 'SQLite';
