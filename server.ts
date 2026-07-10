@@ -1445,11 +1445,41 @@ async function initDbAndSeeds() {
     const flagFile = path.resolve('.db_initialized');
     const dbData = await loadDataFromDb();
     
-    if (dbData && fs.existsSync(flagFile)) {
+    if (dbData) {
       console.log('[Database] Loaded data successfully from Relational Database.');
       memoryDb = dbData;
+      
+      // Migrate or populate role permissions if missing in the database
+      if (!memoryDb.rolePermissions || memoryDb.rolePermissions.length === 0) {
+        console.log('[Database] Role permissions missing or empty in database. Seeding default role permissions...');
+        memoryDb.rolePermissions = [
+          {
+            role: 'Admin',
+            allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit']
+          },
+          {
+            role: 'Manager',
+            allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit']
+          },
+          {
+            role: 'Approver',
+            allowedTabs: ['dashboard', 'sales', 'reports']
+          },
+          {
+            role: 'FSC',
+            allowedTabs: ['dashboard', 'sales']
+          }
+        ];
+        // Sync the changes back to Relational DB to populate the new tables
+        await syncDataToDb(memoryDb);
+      }
+      
+      if (!memoryDb.auditLogs) {
+        memoryDb.auditLogs = [];
+      }
+      
       // Keep database.json updated with latest database changes
-      fs.writeFileSync(DATABASE_FILE, JSON.stringify(dbData, null, 2));
+      fs.writeFileSync(DATABASE_FILE, JSON.stringify(memoryDb, null, 2));
     } else {
       console.log('[Database] Performing a clean database reset & sync to Relational Database...');
       const seeded = loadDatabase();

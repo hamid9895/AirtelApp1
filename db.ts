@@ -82,12 +82,31 @@ export interface Sale {
   reviewedBy: string | null;
 }
 
+export interface RolePermission {
+  role: 'Admin' | 'Manager' | 'Approver' | 'FSC';
+  allowedTabs: string[];
+}
+
+export interface AuditLogEntry {
+  id: string;
+  timestamp: string;
+  userId: string;
+  userEmail: string;
+  userName: string;
+  userRole: string;
+  action: string;
+  targetType: 'dailyStock' | 'allocation' | 'sale' | 'customField' | 'rolePermission' | 'user' | 'auth';
+  details: string;
+}
+
 export interface DatabaseSchema {
   users: User[];
   dailyStocks: DailyStock[];
   allocations: Allocation[];
   sales: Sale[];
   customFieldConfigs: CustomFieldConfig[];
+  rolePermissions?: RolePermission[];
+  auditLogs?: AuditLogEntry[];
 }
 
 let pgPool: pg.Pool | null = null;
@@ -218,6 +237,8 @@ export async function loadDataFromDb(): Promise<DatabaseSchema | null> {
       const aRes = await pgPool.query('SELECT * FROM allocations');
       const sRes = await pgPool.query('SELECT * FROM sales');
       const cRes = await pgPool.query('SELECT * FROM custom_field_configs').catch(() => ({ rows: [], rowCount: 0 }));
+      const rpRes = await pgPool.query('SELECT * FROM role_permissions').catch(() => ({ rows: [], rowCount: 0 }));
+      const alRes = await pgPool.query('SELECT * FROM audit_logs').catch(() => ({ rows: [], rowCount: 0 }));
 
       if (uRes.rowCount === 0) {
         return null; // Signals database is empty, caller should seed it
@@ -302,7 +323,24 @@ export async function loadDataFromDb(): Promise<DatabaseSchema | null> {
         target: row.target as any,
       }));
 
-      return { users, dailyStocks, allocations, sales, customFieldConfigs };
+      const rolePermissions: RolePermission[] = rpRes.rows.map(row => ({
+        role: row.role as any,
+        allowedTabs: JSON.parse(row.allowed_tabs || '[]'),
+      }));
+
+      const auditLogs: AuditLogEntry[] = alRes.rows.map(row => ({
+        id: row.id,
+        timestamp: row.timestamp,
+        userId: row.user_id,
+        userEmail: row.user_email,
+        userName: row.user_name,
+        userRole: row.user_role,
+        action: row.action,
+        targetType: row.target_type as any,
+        details: row.details,
+      }));
+
+      return { users, dailyStocks, allocations, sales, customFieldConfigs, rolePermissions, auditLogs };
     } else {
       if (!sqliteDb) return null;
 
@@ -311,6 +349,8 @@ export async function loadDataFromDb(): Promise<DatabaseSchema | null> {
       const aRows = await sqliteAll('SELECT * FROM allocations');
       const sRows = await sqliteAll('SELECT * FROM sales');
       const cRows = await sqliteAll('SELECT * FROM custom_field_configs').catch(() => []);
+      const rpRows = await sqliteAll('SELECT * FROM role_permissions').catch(() => []);
+      const alRows = await sqliteAll('SELECT * FROM audit_logs').catch(() => []);
 
       if (uRows.length === 0) {
         return null; // Empty SQLite, caller should seed it
@@ -395,7 +435,24 @@ export async function loadDataFromDb(): Promise<DatabaseSchema | null> {
         target: row.target as any,
       }));
 
-      return { users, dailyStocks, allocations, sales, customFieldConfigs };
+      const rolePermissions: RolePermission[] = rpRows.map(row => ({
+        role: row.role as any,
+        allowedTabs: JSON.parse(row.allowed_tabs || '[]'),
+      }));
+
+      const auditLogs: AuditLogEntry[] = alRows.map(row => ({
+        id: row.id,
+        timestamp: row.timestamp,
+        userId: row.user_id,
+        userEmail: row.user_email,
+        userName: row.user_name,
+        userRole: row.user_role,
+        action: row.action,
+        targetType: row.target_type as any,
+        details: row.details,
+      }));
+
+      return { users, dailyStocks, allocations, sales, customFieldConfigs, rolePermissions, auditLogs };
     }
   } catch (err) {
     console.error('[Database] Error loading data from DB:', err);
@@ -419,6 +476,8 @@ export async function syncDataToDb(schema: DatabaseSchema): Promise<void> {
       await client.query('DELETE FROM daily_stocks');
       await client.query('DELETE FROM users');
       await client.query('DELETE FROM custom_field_configs').catch(() => {});
+      await client.query('DELETE FROM role_permissions').catch(() => {});
+      await client.query('DELETE FROM audit_logs').catch(() => {});
 
       // Insert Users
       for (const u of schema.users) {
@@ -472,6 +531,30 @@ export async function syncDataToDb(schema: DatabaseSchema): Promise<void> {
         }
       }
 
+      // Insert Role Permissions
+      if (schema.rolePermissions) {
+        for (const rp of schema.rolePermissions) {
+          await client.query(
+            'INSERT INTO role_permissions (role, allowed_tabs) VALUES ($1, $2)',
+            [rp.role, JSON.stringify(rp.allowedTabs)]
+          );
+        }
+      }
+
+      // Insert Audit Logs
+      if (schema.auditLogs) {
+        for (const al of schema.auditLogs) {
+          await client.query(
+            `INSERT INTO audit_logs (
+              id, timestamp, user_id, user_email, user_name, user_role, action, target_type, details
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+            [
+              al.id, al.timestamp, al.userId, al.userEmail, al.userName, al.userRole, al.action, al.targetType, al.details
+            ]
+          );
+        }
+      }
+
       await client.query('COMMIT');
     } catch (err) {
       await client.query('ROLLBACK');
@@ -491,6 +574,8 @@ export async function syncDataToDb(schema: DatabaseSchema): Promise<void> {
       await sqliteExec('DELETE FROM daily_stocks');
       await sqliteExec('DELETE FROM users');
       await sqliteExec('DELETE FROM custom_field_configs').catch(() => {});
+      await sqliteExec('DELETE FROM role_permissions').catch(() => {});
+      await sqliteExec('DELETE FROM audit_logs').catch(() => {});
 
       // Insert Users
       for (const u of schema.users) {
@@ -540,6 +625,30 @@ export async function syncDataToDb(schema: DatabaseSchema): Promise<void> {
           await sqliteRun(
             'INSERT INTO custom_field_configs (id, name, type, target) VALUES (?, ?, ?, ?)',
             [c.id, c.name, c.type, c.target]
+          );
+        }
+      }
+
+      // Insert Role Permissions
+      if (schema.rolePermissions) {
+        for (const rp of schema.rolePermissions) {
+          await sqliteRun(
+            'INSERT INTO role_permissions (role, allowed_tabs) VALUES (?, ?)',
+            [rp.role, JSON.stringify(rp.allowedTabs)]
+          );
+        }
+      }
+
+      // Insert Audit Logs
+      if (schema.auditLogs) {
+        for (const al of schema.auditLogs) {
+          await sqliteRun(
+            `INSERT INTO audit_logs (
+              id, timestamp, user_id, user_email, user_name, user_role, action, target_type, details
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              al.id, al.timestamp, al.userId, al.userEmail, al.userName, al.userRole, al.action, al.targetType, al.details
+            ]
           );
         }
       }

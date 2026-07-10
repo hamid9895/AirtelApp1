@@ -79,3 +79,20 @@ CREATE TABLE IF NOT EXISTS sales (
   submitted_by TEXT,
   reviewed_by TEXT
 );
+
+CREATE TABLE IF NOT EXISTS role_permissions (
+  role TEXT PRIMARY KEY,
+  allowed_tabs TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id TEXT PRIMARY KEY,
+  timestamp TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  user_email TEXT NOT NULL,
+  user_name TEXT NOT NULL,
+  user_role TEXT NOT NULL,
+  action TEXT NOT NULL,
+  target_type TEXT NOT NULL,
+  details TEXT NOT NULL
+);
