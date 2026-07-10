@@ -33,6 +33,8 @@ import { UsersTab } from './components/UsersTab';
 import { MastersTab } from './components/MastersTab';
 import { UserRolesTab } from './components/UserRolesTab';
 import { AuditLogTab } from './components/AuditLogTab';
+import { ConfigurationsTab } from './components/ConfigurationsTab';
+import { TablesTab } from './components/TablesTab';
 
 export default function App() {
   // --- CORE STATE MANAGERS ---
@@ -53,7 +55,7 @@ export default function App() {
   const [loginPassword, setLoginPassword] = useState<string>('');
 
   // Navigation controller
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'dailyStock' | 'allocations' | 'sales' | 'reports' | 'users' | 'masters-fsc' | 'masters-stock' | 'user-roles' | 'audit'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'dailyStock' | 'allocations' | 'sales' | 'reports' | 'users' | 'masters-fsc' | 'masters-stock' | 'user-roles' | 'audit' | 'configurations' | 'admin-tables'>('dashboard');
 
   // Primary Data Stores
   const [dailyStocks, setDailyStocks] = useState<DailyStock[]>([]);
@@ -62,6 +64,7 @@ export default function App() {
   const [allUsers, setAllUsers] = useState<UserDto[]>([]);
   const [customFieldConfigs, setCustomFieldConfigs] = useState<CustomFieldConfig[]>([]);
   const [rolePermissions, setRolePermissions] = useState<any[]>([]);
+  const [globalConfig, setGlobalConfig] = useState<{ commissionPercentage: number; simAmount: number } | null>(null);
 
   // Filtering & Query States
   const [globalSearch, setGlobalSearch] = useState<string>('');
@@ -69,24 +72,24 @@ export default function App() {
 
   // Daily Stock Form Fields
   const [stockDate, setStockDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [stockOpeningAmount, setStockOpeningAmount] = useState<number>(150000);
-  const [stockOpeningSim, setStockOpeningSim] = useState<number>(500);
-  const [stockFlexy, setStockFlexy] = useState<number>(100000);
-  const [stockFlexyClaim1, setStockFlexyClaim1] = useState<number>(20000);
-  const [stockFlexyClaim2, setStockFlexyClaim2] = useState<number>(15000);
-  const [stockSim, setStockSim] = useState<number>(350);
+  const [stockOpeningAmount, setStockOpeningAmount] = useState<number>(0);
+  const [stockOpeningSim, setStockOpeningSim] = useState<number>(0);
+  const [stockFlexy, setStockFlexy] = useState<number>(0);
+  const [stockFlexyClaim1, setStockFlexyClaim1] = useState<number>(0);
+  const [stockFlexyClaim2, setStockFlexyClaim2] = useState<number>(0);
+  const [stockSim, setStockSim] = useState<number>(0);
 
   // FSC Allocation Form Fields
   const [allocDate, setAllocDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [allocFscId, setAllocFscId] = useState<string>('');
-  const [allocOpeningBalance, setAllocOpeningBalance] = useState<number>(10000);
-  const [allocOpeningSim, setAllocOpeningSim] = useState<number>(50);
-  const [allocAutoRefill1, setAllocAutoRefill1] = useState<number>(20000);
-  const [allocAutoRefill2, setAllocAutoRefill2] = useState<number>(15000);
-  const [allocAutoRefill3, setAllocAutoRefill3] = useState<number>(10000);
-  const [allocEcManual1, setAllocEcManual1] = useState<number>(5000);
-  const [allocEcManual2, setAllocEcManual2] = useState<number>(5000);
-  const [allocSim, setAllocSim] = useState<number>(35);
+  const [allocOpeningBalance, setAllocOpeningBalance] = useState<number>(0);
+  const [allocOpeningSim, setAllocOpeningSim] = useState<number>(0);
+  const [allocAutoRefill1, setAllocAutoRefill1] = useState<number>(0);
+  const [allocAutoRefill2, setAllocAutoRefill2] = useState<number>(0);
+  const [allocAutoRefill3, setAllocAutoRefill3] = useState<number>(0);
+  const [allocEcManual1, setAllocEcManual1] = useState<number>(0);
+  const [allocEcManual2, setAllocEcManual2] = useState<number>(0);
+  const [allocSim, setAllocSim] = useState<number>(0);
 
   // Daily FSC Sales Form Fields
   const [saleDate, setSaleDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -170,16 +173,20 @@ export default function App() {
   const allowedTabsForUser = React.useMemo(() => {
     if (!user) return [];
     if (user.role === 'Admin') {
-      return ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'masters-fsc', 'masters-stock', 'user-roles', 'audit'];
+      return ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'masters-fsc', 'masters-stock', 'user-roles', 'audit', 'configurations', 'admin-tables'];
     }
     const matchingPermission = rolePermissions.find(p => p.role === user.role);
     if (matchingPermission) {
-      return matchingPermission.allowedTabs;
+      let tabs = [...matchingPermission.allowedTabs];
+      if ((user.role === 'Admin' || user.role === 'Manager') && !tabs.includes('configurations')) {
+        tabs.push('configurations');
+      }
+      return tabs;
     }
     
     // Fallback safety values before live API data is parsed
     if (user.role === 'Manager') {
-      return ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'masters-fsc', 'masters-stock', 'audit'];
+      return ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'masters-fsc', 'masters-stock', 'audit', 'configurations'];
     }
     if (user.role === 'Approver') {
       return ['dashboard', 'sales', 'reports'];
@@ -247,8 +254,8 @@ export default function App() {
         setStockOpeningAmount(closingAmt);
         setStockOpeningSim(closingSimCount);
       } else {
-        setStockOpeningAmount(150000);
-        setStockOpeningSim(500);
+        setStockOpeningAmount(0);
+        setStockOpeningSim(0);
       }
     }
   }, [stockDate, dailyStocks, editingStockId]);
@@ -389,6 +396,17 @@ export default function App() {
         setRolePermissions(permissionsData.permissions || []);
       }
 
+      // Retrieve global configurations
+      try {
+        const configRes = await fetch('/api/configurations', { headers: { 'Authorization': `Bearer ${token}` } });
+        const configData = await configRes.json();
+        if (configData.success && configData.configurations) {
+          setGlobalConfig(configData.configurations);
+        }
+      } catch (e) {
+        console.warn('Failed to load global configurations, using local fallback:', e);
+      }
+
       // Trigger automatic report compilation on tab load
       if (activeTab === 'reports') {
         fetchReportSummaries();
@@ -480,24 +498,24 @@ export default function App() {
 
     // Baseline inventory inputs
     setStockDate(new Date().toISOString().split('T')[0]);
-    setStockOpeningAmount(150000);
-    setStockOpeningSim(500);
-    setStockFlexy(100000);
-    setStockFlexyClaim1(20000);
-    setStockFlexyClaim2(15000);
-    setStockSim(350);
+    setStockOpeningAmount(0);
+    setStockOpeningSim(0);
+    setStockFlexy(0);
+    setStockFlexyClaim1(0);
+    setStockFlexyClaim2(0);
+    setStockSim(0);
 
     // Baseline allocation inputs
     setAllocDate(new Date().toISOString().split('T')[0]);
     setAllocFscId('');
-    setAllocOpeningBalance(10000);
-    setAllocOpeningSim(50);
-    setAllocAutoRefill1(20000);
-    setAllocAutoRefill2(15000);
-    setAllocAutoRefill3(10000);
-    setAllocEcManual1(5000);
-    setAllocEcManual2(5000);
-    setAllocSim(35);
+    setAllocOpeningBalance(0);
+    setAllocOpeningSim(0);
+    setAllocAutoRefill1(0);
+    setAllocAutoRefill2(0);
+    setAllocAutoRefill3(0);
+    setAllocEcManual1(0);
+    setAllocEcManual2(0);
+    setAllocSim(0);
 
     // Baseline sales inputs
     setSaleDate(new Date().toISOString().split('T')[0]);
@@ -606,7 +624,7 @@ export default function App() {
   };
 
   // Save Daily Sales Sheet
-  const handleCreateSale = async (e: React.FormEvent) => {
+  const handleCreateSale = async (e: React.FormEvent, customFields?: Record<string, string | number>) => {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -645,7 +663,8 @@ export default function App() {
           openingSim: saleOpeningSim,
           sim: saleSim,
           closingSim: saleClosingSim,
-          remarks: saleRemarks
+          remarks: saleRemarks,
+          customFields
         })
       });
       const data = await response.json();
@@ -1009,6 +1028,7 @@ export default function App() {
             editingAllocId={editingAllocId}
             onCancelEdit={handleCancelEdit}
             customFieldConfigs={customFieldConfigs}
+            globalConfig={globalConfig}
           />
         )}
 
@@ -1023,6 +1043,7 @@ export default function App() {
             onSubmitSaleDraft={handleSubmitSaleDraft}
             onSubmitSaleForm={handleCreateSale}
             onReviewSaleSubmit={handleReviewSaleSubmit}
+            allocations={allocations}
             saleDate={saleDate}
             setSaleDate={setSaleDate}
             saleFscId={saleFscId}
@@ -1055,6 +1076,8 @@ export default function App() {
             onEditSaleClick={handleEditSaleClick}
             editingSaleId={editingSaleId}
             onCancelEdit={handleCancelEdit}
+            customFieldConfigs={customFieldConfigs}
+            globalConfig={globalConfig}
           />
         )}
 
@@ -1130,6 +1153,21 @@ export default function App() {
         {/* Tab 10: Transaction Audit logs (Admin or Manager Only) */}
         {activeTab === 'audit' && (user.role === 'Admin' || user.role === 'Manager') && (
           <AuditLogTab
+            token={token}
+          />
+        )}
+
+        {/* Tab 11: Global configurations (Admin or Manager Only) */}
+        {activeTab === 'configurations' && (user.role === 'Admin' || user.role === 'Manager') && (
+          <ConfigurationsTab
+            token={token}
+            onConfigUpdated={loadTabContent}
+          />
+        )}
+
+        {/* Tab 12: Dynamic table row level inspection (Admin Only) */}
+        {activeTab === 'admin-tables' && user.role === 'Admin' && (
+          <TablesTab
             token={token}
           />
         )}

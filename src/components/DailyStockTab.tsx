@@ -255,23 +255,25 @@ export const DailyStockTab: React.FC<DailyStockTabProps> = ({
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className="text-[10px] font-extrabold uppercase text-slate-400">Opening Cash Amount (₹)</label>
+                <label className="text-[10px] font-extrabold uppercase text-slate-400">Opening Cash Amount (₹) [Read-Only]</label>
                 <input
                   type="number"
                   required
+                  disabled
                   value={stockOpeningAmount}
-                  onChange={(e) => setStockOpeningAmount(Number(e.target.value))}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-[#EE1D23]"
+                  className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-xs font-extrabold text-slate-500 cursor-not-allowed opacity-75"
+                  title="Automatically calculated from previous day's closing balance"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-extrabold uppercase text-slate-400">Opening SIM Count</label>
+                <label className="text-[10px] font-extrabold uppercase text-slate-400">Opening SIM Count [Read-Only]</label>
                 <input
                   type="number"
                   required
+                  disabled
                   value={stockOpeningSim}
-                  onChange={(e) => setStockOpeningSim(Number(e.target.value))}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-[#EE1D23]"
+                  className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-xs font-extrabold text-slate-500 cursor-not-allowed opacity-75"
+                  title="Automatically calculated from previous day's closing SIM count"
                 />
               </div>
             </div>
@@ -286,8 +288,8 @@ export const DailyStockTab: React.FC<DailyStockTabProps> = ({
                 <input
                   type="number"
                   required
-                  value={stockFlexy}
-                  onChange={(e) => setStockFlexy(Number(e.target.value))}
+                  value={stockFlexy === 0 ? '' : stockFlexy}
+                  onChange={(e) => setStockFlexy(e.target.value === '' ? 0 : Number(e.target.value))}
                   className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-[#EE1D23]"
                 />
               </div>
@@ -298,8 +300,8 @@ export const DailyStockTab: React.FC<DailyStockTabProps> = ({
                   <input
                     type="number"
                     required
-                    value={stockFlexyClaim1}
-                    onChange={(e) => setStockFlexyClaim1(Number(e.target.value))}
+                    value={stockFlexyClaim1 === 0 ? '' : stockFlexyClaim1}
+                    onChange={(e) => setStockFlexyClaim1(e.target.value === '' ? 0 : Number(e.target.value))}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-[#EE1D23]"
                   />
                 </div>
@@ -308,8 +310,8 @@ export const DailyStockTab: React.FC<DailyStockTabProps> = ({
                   <input
                     type="number"
                     required
-                    value={stockFlexyClaim2}
-                    onChange={(e) => setStockFlexyClaim2(Number(e.target.value))}
+                    value={stockFlexyClaim2 === 0 ? '' : stockFlexyClaim2}
+                    onChange={(e) => setStockFlexyClaim2(e.target.value === '' ? 0 : Number(e.target.value))}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-[#EE1D23]"
                   />
                 </div>
@@ -321,8 +323,8 @@ export const DailyStockTab: React.FC<DailyStockTabProps> = ({
               <input
                 type="number"
                 required
-                value={stockSim}
-                onChange={(e) => setStockSim(Number(e.target.value))}
+                value={stockSim === 0 ? '' : stockSim}
+                onChange={(e) => setStockSim(e.target.value === '' ? 0 : Number(e.target.value))}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-[#EE1D23]"
               />
             </div>

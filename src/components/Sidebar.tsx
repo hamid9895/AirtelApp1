@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Layers, ClipboardList, TrendingUp, DollarSign, FileText, Users, LogOut, Settings2, Menu, X, HelpCircle, Shield, History } from 'lucide-react';
+import { Layers, ClipboardList, TrendingUp, DollarSign, FileText, Users, LogOut, Settings2, Menu, X, HelpCircle, Shield, History, Database } from 'lucide-react';
 import { UserDto, DbStatusDto } from '../types';
 
 interface SidebarProps {
   user: UserDto;
-  activeTab: 'dashboard' | 'dailyStock' | 'allocations' | 'sales' | 'reports' | 'users' | 'masters-fsc' | 'masters-stock' | 'user-roles' | 'audit';
-  setActiveTab: (tab: 'dashboard' | 'dailyStock' | 'allocations' | 'sales' | 'reports' | 'users' | 'masters-fsc' | 'masters-stock' | 'user-roles' | 'audit') => void;
+  activeTab: 'dashboard' | 'dailyStock' | 'allocations' | 'sales' | 'reports' | 'users' | 'masters-fsc' | 'masters-stock' | 'user-roles' | 'audit' | 'configurations' | 'admin-tables';
+  setActiveTab: (tab: 'dashboard' | 'dailyStock' | 'allocations' | 'sales' | 'reports' | 'users' | 'masters-fsc' | 'masters-stock' | 'user-roles' | 'audit' | 'configurations' | 'admin-tables') => void;
   isStandaloneMode: boolean;
   dbStatus?: DbStatusDto | null;
   onLogOut: () => void;
@@ -75,6 +75,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'Daily Stock Fields',
       icon: Settings2,
       visible: isAdminOrManager && hasAccess('masters-stock')
+    },
+    {
+      id: 'configurations',
+      label: 'Configurations',
+      icon: Settings2,
+      visible: isAdminOrManager && hasAccess('configurations')
     }
   ];
 
@@ -90,6 +96,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'User Roles',
       icon: Shield,
       visible: user.role === 'Admin' && hasAccess('user-roles')
+    },
+    {
+      id: 'admin-tables',
+      label: 'Tables',
+      icon: Database,
+      visible: user.role === 'Admin'
     },
     {
       id: 'audit',
@@ -227,7 +239,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Users & Administrative Control */}
         {visibleAdminItems.length > 0 && (
           <div className="space-y-1">
-            <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest px-3.5 block mb-2">Users & Security</span>
+            <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest px-3.5 block mb-2">Administrator settings</span>
             {visibleAdminItems.map(item => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;

@@ -69,6 +69,7 @@ interface Sale {
   createdBy: string | null;
   submittedBy: string | null;
   reviewedBy: string | null;
+  customFields?: Record<string, string | number>;
 }
 
 const STORAGE_KEYS = {
@@ -77,13 +78,21 @@ const STORAGE_KEYS = {
   ALLOCATIONS: 'airtel_mock_allocations',
   SALES: 'airtel_mock_sales',
   ROLE_PERMISSIONS: 'airtel_mock_role_permissions',
-  AUDIT_LOGS: 'airtel_mock_audit_logs'
+  AUDIT_LOGS: 'airtel_mock_audit_logs',
+  CONFIGURATIONS: 'airtel_mock_configurations'
 };
 
 // Seed default accounts if they don't exist
 export function initializeMockDatabase() {
   const yesterdayStr = new Date(Date.now() - 24 * 3600 * 1000).toISOString().split('T')[0];
   const todayStr = new Date().toISOString().split('T')[0];
+
+  if (!localStorage.getItem(STORAGE_KEYS.CONFIGURATIONS)) {
+    localStorage.setItem(STORAGE_KEYS.CONFIGURATIONS, JSON.stringify({
+      commissionPercentage: 3.0,
+      simAmount: 150.0
+    }));
+  }
 
   if (!localStorage.getItem(STORAGE_KEYS.USERS)) {
     const users: User[] = [
@@ -152,11 +161,11 @@ export function initializeMockDatabase() {
     const permissions = [
       {
         role: 'Admin',
-        allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit']
+        allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit', 'configurations']
       },
       {
         role: 'Manager',
-        allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit']
+        allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit', 'configurations']
       },
       {
         role: 'Approver',
@@ -649,9 +658,21 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
       const prevShort = Number(body.previousShort);
       const receivedCash = Number(body.saleAmount);
 
-      const computedRefills = refill1 + refill2 + refill3 + manual1 + manual2;
-      const saleTotalValue = (opening + computedRefills) - closing;
-      const calculatedShort = saleTotalValue - receivedCash + prevShort;
+      const config = JSON.parse(localStorage.getItem(STORAGE_KEYS.CONFIGURATIONS) || '{"commissionPercentage": 3.0, "simAmount": 150.0}');
+      const commissionPct = config.commissionPercentage || 3.0;
+      const commFactor = 1 + (commissionPct / 100);
+
+      const netRefill1 = refill1 / commFactor;
+      const netRefill2 = refill2 / commFactor;
+      const netRefill3 = refill3 / commFactor;
+      const netManual1 = manual1 / commFactor;
+      const netManual2 = manual2 / commFactor;
+
+      const computedRefills = netRefill1 + netRefill2 + netRefill3 + netManual1 + netManual2;
+      const rawSaleTotalValue = (opening + computedRefills) - closing;
+      const saleTotalValue = Math.round(rawSaleTotalValue * 100) / 100;
+      const rawCalculatedShort = saleTotalValue - receivedCash + prevShort;
+      const calculatedShort = Math.round(rawCalculatedShort * 100) / 100;
 
       const newSale: Sale = {
         id: generateId('sale'),
@@ -680,7 +701,8 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
         reviewedAt: null,
         createdBy: user.id,
         submittedBy: null,
-        reviewedBy: null
+        reviewedBy: null,
+        customFields: body.customFields || {}
       };
 
       sales.unshift(newSale);
@@ -793,7 +815,7 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
     const { 
       openingBalance, autoRefill1, autoRefill2, autoRefill3, 
       ecManual1, ecManual2, closingBalance, 
-      previousShort, saleAmount, openingSim, sim, closingSim, remarks 
+      previousShort, saleAmount, openingSim, sim, closingSim, remarks, customFields 
     } = body;
 
     if (openingBalance !== undefined) current.openingBalance = Number(openingBalance);
@@ -809,10 +831,24 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
     if (sim !== undefined) current.sim = Number(sim);
     if (closingSim !== undefined) current.closingSim = Number(closingSim);
     if (remarks !== undefined) current.remarks = remarks;
+    if (customFields !== undefined) current.customFields = customFields;
 
     // Recalculate
-    current.saleTotal = current.openingBalance + current.autoRefill1 + current.autoRefill2 + current.autoRefill3 + current.ecManual1 + current.ecManual2 - current.closingBalance;
-    current.shortAmount = Math.max(0, current.saleTotal - current.saleAmount) + current.previousShort;
+    const config = JSON.parse(localStorage.getItem(STORAGE_KEYS.CONFIGURATIONS) || '{"commissionPercentage": 3.0, "simAmount": 150.0}');
+    const commissionPct = config.commissionPercentage || 3.0;
+    const commFactor = 1 + (commissionPct / 100);
+
+    const netRefill1 = current.autoRefill1 / commFactor;
+    const netRefill2 = current.autoRefill2 / commFactor;
+    const netRefill3 = current.autoRefill3 / commFactor;
+    const netManual1 = current.ecManual1 / commFactor;
+    const netManual2 = current.ecManual2 / commFactor;
+
+    const rawSaleTotal = current.openingBalance + netRefill1 + netRefill2 + netRefill3 + netManual1 + netManual2 - current.closingBalance;
+    current.saleTotal = Math.round(rawSaleTotal * 100) / 100;
+    
+    const rawShortAmount = Math.max(0, current.saleTotal - current.saleAmount) + current.previousShort;
+    current.shortAmount = Math.round(rawShortAmount * 100) / 100;
 
     sales[idx] = current;
     saveMockList(STORAGE_KEYS.SALES, sales);
@@ -902,6 +938,32 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
     }
   }
 
+  // GLOBAL CONFIGURATIONS
+  if (cleanUrl === '/api/configurations') {
+    const user = getUserFromToken(headers);
+    if (!user) return mockResponse({ success: false, error: 'Authentication required' }, 401);
+
+    if (method === 'GET') {
+      const configStr = localStorage.getItem(STORAGE_KEYS.CONFIGURATIONS);
+      const configurations = configStr ? JSON.parse(configStr) : { commissionPercentage: 3.0, simAmount: 150.0 };
+      return mockResponse({ success: true, configurations });
+    }
+
+    if (method === 'POST') {
+      if (!['Admin', 'Manager'].includes(user.role)) {
+        return mockResponse({ success: false, error: 'Privileged role is required' }, 403);
+      }
+      const { commissionPercentage, simAmount } = body;
+      const configurations = {
+        commissionPercentage: Number(commissionPercentage),
+        simAmount: Number(simAmount)
+      };
+      localStorage.setItem(STORAGE_KEYS.CONFIGURATIONS, JSON.stringify(configurations));
+      logMockAudit(user, 'UPDATE', 'configuration', `Updated configurations: Comm: ${commissionPercentage}%, SIM: ₹${simAmount}`);
+      return mockResponse({ success: true, configurations });
+    }
+  }
+
   // 9. AUDIT LOGS
   if (cleanUrl === '/api/audit-logs' && method === 'GET') {
     const user = getUserFromToken(headers);
@@ -911,6 +973,154 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
     const logs = getMockList<any>(STORAGE_KEYS.AUDIT_LOGS);
     const sortedLogs = [...logs].sort((a: any, b: any) => b.timestamp.localeCompare(a.timestamp));
     return mockResponse({ success: true, auditLogs: sortedLogs });
+  }
+
+  // 10. ADMINISTRATOR TABLES (Admin Only Mock)
+  if (cleanUrl === '/api/admin/tables' && method === 'GET') {
+    const user = getUserFromToken(headers);
+    if (!user || user.role !== 'Admin') {
+      return mockResponse({ success: false, error: 'Administrator role required' }, 403);
+    }
+    const tables = [
+      { name: 'users', label: 'Users', count: getMockList(STORAGE_KEYS.USERS).length, primaryKey: 'id' },
+      { name: 'dailyStocks', label: 'Daily Stock Ledger', count: getMockList(STORAGE_KEYS.STOCKS).length, primaryKey: 'id' },
+      { name: 'allocations', label: 'FSC Allocations', count: getMockList(STORAGE_KEYS.ALLOCATIONS).length, primaryKey: 'id' },
+      { name: 'sales', label: 'FSC Sales Sheets', count: getMockList(STORAGE_KEYS.SALES).length, primaryKey: 'id' },
+      { name: 'customFieldConfigs', label: 'Custom Field Configurations', count: getMockList('airtel_mock_custom_fields').length, primaryKey: 'id' },
+      { name: 'rolePermissions', label: 'Role Permissions Matrix', count: getMockList(STORAGE_KEYS.ROLE_PERMISSIONS).length, primaryKey: 'role' },
+      { name: 'auditLogs', label: 'Audit Logs', count: getMockList(STORAGE_KEYS.AUDIT_LOGS).length, primaryKey: 'id' }
+    ];
+    return mockResponse({ success: true, tables });
+  }
+
+  if (cleanUrl.startsWith('/api/admin/tables/') && method === 'GET') {
+    const user = getUserFromToken(headers);
+    if (!user || user.role !== 'Admin') {
+      return mockResponse({ success: false, error: 'Administrator role required' }, 403);
+    }
+    const tableName = cleanUrl.substring('/api/admin/tables/'.length);
+    const keyMap: Record<string, string> = {
+      users: STORAGE_KEYS.USERS,
+      dailyStocks: STORAGE_KEYS.STOCKS,
+      allocations: STORAGE_KEYS.ALLOCATIONS,
+      sales: STORAGE_KEYS.SALES,
+      customFieldConfigs: 'airtel_mock_custom_fields',
+      rolePermissions: STORAGE_KEYS.ROLE_PERMISSIONS,
+      auditLogs: STORAGE_KEYS.AUDIT_LOGS
+    };
+    const storageKey = keyMap[tableName];
+    if (!storageKey) return mockResponse({ success: false, error: `Table '${tableName}' not found` }, 404);
+    return mockResponse({ success: true, rows: getMockList(storageKey) });
+  }
+
+  if (cleanUrl.startsWith('/api/admin/tables/') && method === 'PUT') {
+    const user = getUserFromToken(headers);
+    if (!user || user.role !== 'Admin') {
+      return mockResponse({ success: false, error: 'Administrator role required' }, 403);
+    }
+    
+    // URL: /api/admin/tables/:tableName/:rowId
+    const parts = cleanUrl.split('/');
+    const tableName = parts[4];
+    const rowId = parts[5];
+    
+    const keyMap: Record<string, string> = {
+      users: STORAGE_KEYS.USERS,
+      dailyStocks: STORAGE_KEYS.STOCKS,
+      allocations: STORAGE_KEYS.ALLOCATIONS,
+      sales: STORAGE_KEYS.SALES,
+      customFieldConfigs: 'airtel_mock_custom_fields',
+      rolePermissions: STORAGE_KEYS.ROLE_PERMISSIONS,
+      auditLogs: STORAGE_KEYS.AUDIT_LOGS
+    };
+    const storageKey = keyMap[tableName];
+    if (!storageKey) return mockResponse({ success: false, error: `Table '${tableName}' not found` }, 404);
+    
+    const list = getMockList<any>(storageKey);
+    const keyName = tableName === 'rolePermissions' ? 'role' : 'id';
+    const idx = list.findIndex(r => r[keyName] === rowId);
+    if (idx === -1) return mockResponse({ success: false, error: `Row '${rowId}' not found` }, 404);
+    
+    const updated = { ...list[idx], ...body };
+    updated[keyName] = rowId; // keep primary key constant
+    list[idx] = updated;
+    
+    saveMockList(storageKey, list);
+    logMockAudit(user, 'UPDATE_ROW', tableName, `Admin updated row in mock '${tableName}' (ID: ${rowId})`);
+    return mockResponse({ success: true, updated });
+  }
+
+  if (cleanUrl.startsWith('/api/admin/tables/') && method === 'DELETE') {
+    const user = getUserFromToken(headers);
+    if (!user || user.role !== 'Admin') {
+      return mockResponse({ success: false, error: 'Administrator role required' }, 403);
+    }
+    
+    // URL: /api/admin/tables/:tableName/:rowId
+    const parts = cleanUrl.split('/');
+    const tableName = parts[4];
+    const rowId = parts[5];
+    
+    const keyMap: Record<string, string> = {
+      users: STORAGE_KEYS.USERS,
+      dailyStocks: STORAGE_KEYS.STOCKS,
+      allocations: STORAGE_KEYS.ALLOCATIONS,
+      sales: STORAGE_KEYS.SALES,
+      customFieldConfigs: 'airtel_mock_custom_fields',
+      rolePermissions: STORAGE_KEYS.ROLE_PERMISSIONS,
+      auditLogs: STORAGE_KEYS.AUDIT_LOGS
+    };
+    const storageKey = keyMap[tableName];
+    if (!storageKey) return mockResponse({ success: false, error: `Table '${tableName}' not found` }, 404);
+    
+    let list = getMockList<any>(storageKey);
+    const keyName = tableName === 'rolePermissions' ? 'role' : 'id';
+    const initialLen = list.length;
+    list = list.filter(r => r[keyName] !== rowId);
+    
+    if (list.length === initialLen) return mockResponse({ success: false, error: `Row '${rowId}' not found` }, 404);
+    
+    saveMockList(storageKey, list);
+    logMockAudit(user, 'DELETE_ROW', tableName, `Admin deleted row in mock '${tableName}' (ID: ${rowId})`);
+    return mockResponse({ success: true, message: 'Row deleted' });
+  }
+
+  if (cleanUrl.startsWith('/api/admin/tables/') && cleanUrl.endsWith('/bulk-delete') && method === 'POST') {
+    const user = getUserFromToken(headers);
+    if (!user || user.role !== 'Admin') {
+      return mockResponse({ success: false, error: 'Administrator role required' }, 403);
+    }
+    
+    // URL: /api/admin/tables/:tableName/bulk-delete
+    const parts = cleanUrl.split('/');
+    const tableName = parts[4];
+    const { rowIds } = body;
+    
+    if (!rowIds || !Array.isArray(rowIds)) {
+      return mockResponse({ success: false, error: 'rowIds is required and must be an array' }, 400);
+    }
+    
+    const keyMap: Record<string, string> = {
+      users: STORAGE_KEYS.USERS,
+      dailyStocks: STORAGE_KEYS.STOCKS,
+      allocations: STORAGE_KEYS.ALLOCATIONS,
+      sales: STORAGE_KEYS.SALES,
+      customFieldConfigs: 'airtel_mock_custom_fields',
+      rolePermissions: STORAGE_KEYS.ROLE_PERMISSIONS,
+      auditLogs: STORAGE_KEYS.AUDIT_LOGS
+    };
+    const storageKey = keyMap[tableName];
+    if (!storageKey) return mockResponse({ success: false, error: `Table '${tableName}' not found` }, 404);
+    
+    let list = getMockList<any>(storageKey);
+    const keyName = tableName === 'rolePermissions' ? 'role' : 'id';
+    const initialLen = list.length;
+    list = list.filter(r => !rowIds.includes(r[keyName]));
+    const deletedCount = initialLen - list.length;
+    
+    saveMockList(storageKey, list);
+    logMockAudit(user, 'BULK_DELETE', tableName, `Admin bulk-deleted ${deletedCount} rows in mock '${tableName}'`);
+    return mockResponse({ success: true, deletedCount, message: `Successfully deleted ${deletedCount} rows.` });
   }
 
   // 404 FALLBACK

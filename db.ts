@@ -80,6 +80,7 @@ export interface Sale {
   createdBy: string | null;
   submittedBy: string | null;
   reviewedBy: string | null;
+  customFields?: Record<string, string | number>;
 }
 
 export interface RolePermission {
@@ -107,11 +108,12 @@ export interface DatabaseSchema {
   customFieldConfigs: CustomFieldConfig[];
   rolePermissions?: RolePermission[];
   auditLogs?: AuditLogEntry[];
+  configurations?: { commissionPercentage: number; simAmount: number };
 }
 
 let pgPool: pg.Pool | null = null;
 let sqliteDb: any = null;
-const usePostgres = true;
+const usePostgres = !!process.env.DATABASE_URL;
 
 export function getDatabaseType(): 'PostgreSQL' | 'SQLite' {
   return usePostgres ? 'PostgreSQL' : 'SQLite';
@@ -239,6 +241,7 @@ export async function loadDataFromDb(): Promise<DatabaseSchema | null> {
       const cRes = await pgPool.query('SELECT * FROM custom_field_configs').catch(() => ({ rows: [], rowCount: 0 }));
       const rpRes = await pgPool.query('SELECT * FROM role_permissions').catch(() => ({ rows: [], rowCount: 0 }));
       const alRes = await pgPool.query('SELECT * FROM audit_logs').catch(() => ({ rows: [], rowCount: 0 }));
+      const configRes = await pgPool.query('SELECT * FROM configurations').catch(() => ({ rows: [], rowCount: 0 }));
 
       if (uRes.rowCount === 0) {
         return null; // Signals database is empty, caller should seed it
@@ -314,6 +317,7 @@ export async function loadDataFromDb(): Promise<DatabaseSchema | null> {
         createdBy: row.created_by,
         submittedBy: row.submitted_by,
         reviewedBy: row.reviewed_by,
+        customFields: JSON.parse(row.custom_fields || '{}'),
       }));
 
       const customFieldConfigs: CustomFieldConfig[] = cRes.rows.map(row => ({
@@ -340,7 +344,12 @@ export async function loadDataFromDb(): Promise<DatabaseSchema | null> {
         details: row.details,
       }));
 
-      return { users, dailyStocks, allocations, sales, customFieldConfigs, rolePermissions, auditLogs };
+      const configurations = configRes.rowCount > 0 ? {
+        commissionPercentage: Number(configRes.rows[0].commission_percentage),
+        simAmount: Number(configRes.rows[0].sim_amount),
+      } : { commissionPercentage: 3.0, simAmount: 150.0 };
+
+      return { users, dailyStocks, allocations, sales, customFieldConfigs, rolePermissions, auditLogs, configurations };
     } else {
       if (!sqliteDb) return null;
 
@@ -351,6 +360,7 @@ export async function loadDataFromDb(): Promise<DatabaseSchema | null> {
       const cRows = await sqliteAll('SELECT * FROM custom_field_configs').catch(() => []);
       const rpRows = await sqliteAll('SELECT * FROM role_permissions').catch(() => []);
       const alRows = await sqliteAll('SELECT * FROM audit_logs').catch(() => []);
+      const configRows = await sqliteAll('SELECT * FROM configurations').catch(() => []);
 
       if (uRows.length === 0) {
         return null; // Empty SQLite, caller should seed it
@@ -426,6 +436,7 @@ export async function loadDataFromDb(): Promise<DatabaseSchema | null> {
         createdBy: row.created_by,
         submittedBy: row.submitted_by,
         reviewedBy: row.reviewed_by,
+        customFields: JSON.parse(row.custom_fields || '{}'),
       }));
 
       const customFieldConfigs: CustomFieldConfig[] = cRows.map(row => ({
@@ -452,7 +463,12 @@ export async function loadDataFromDb(): Promise<DatabaseSchema | null> {
         details: row.details,
       }));
 
-      return { users, dailyStocks, allocations, sales, customFieldConfigs, rolePermissions, auditLogs };
+      const configurations = configRows.length > 0 ? {
+        commissionPercentage: Number(configRows[0].commission_percentage),
+        simAmount: Number(configRows[0].sim_amount),
+      } : { commissionPercentage: 3.0, simAmount: 150.0 };
+
+      return { users, dailyStocks, allocations, sales, customFieldConfigs, rolePermissions, auditLogs, configurations };
     }
   } catch (err) {
     console.error('[Database] Error loading data from DB:', err);
@@ -478,6 +494,7 @@ export async function syncDataToDb(schema: DatabaseSchema): Promise<void> {
       await client.query('DELETE FROM custom_field_configs').catch(() => {});
       await client.query('DELETE FROM role_permissions').catch(() => {});
       await client.query('DELETE FROM audit_logs').catch(() => {});
+      await client.query('DELETE FROM configurations').catch(() => {});
 
       // Insert Users
       for (const u of schema.users) {
@@ -510,13 +527,13 @@ export async function syncDataToDb(schema: DatabaseSchema): Promise<void> {
             id, date, fsc_id, allocation_id, opening_balance, auto_refill1, auto_refill2, auto_refill3, 
             ec_manual1, ec_manual2, closing_balance, previous_short, sale_total, sale_amount, short_amount, 
             opening_sim, sim, closing_sim, status, remarks, review_note, created_at, submitted_at, 
-            reviewed_at, created_by, submitted_by, reviewed_by
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)`,
+            reviewed_at, created_by, submitted_by, reviewed_by, custom_fields
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)`,
           [
             s.id, s.date, s.fscId, s.allocationId, s.openingBalance, s.autoRefill1, s.autoRefill2, s.autoRefill3,
             s.ecManual1, s.ecManual2, s.closingBalance, s.previousShort, s.saleTotal, s.saleAmount, s.shortAmount,
             s.openingSim, s.sim, s.closingSim, s.status, s.remarks, s.reviewNote, s.createdAt, s.submittedAt,
-            s.reviewedAt, s.createdBy, s.submittedBy, s.reviewedBy
+            s.reviewedAt, s.createdBy, s.submittedBy, s.reviewedBy, JSON.stringify(s.customFields || {})
           ]
         );
       }
@@ -555,6 +572,14 @@ export async function syncDataToDb(schema: DatabaseSchema): Promise<void> {
         }
       }
 
+      // Insert configurations
+      if (schema.configurations) {
+        await client.query(
+          'INSERT INTO configurations (id, commission_percentage, sim_amount) VALUES ($1, $2, $3)',
+          ['default', schema.configurations.commissionPercentage, schema.configurations.simAmount]
+        );
+      }
+
       await client.query('COMMIT');
     } catch (err) {
       await client.query('ROLLBACK');
@@ -576,6 +601,7 @@ export async function syncDataToDb(schema: DatabaseSchema): Promise<void> {
       await sqliteExec('DELETE FROM custom_field_configs').catch(() => {});
       await sqliteExec('DELETE FROM role_permissions').catch(() => {});
       await sqliteExec('DELETE FROM audit_logs').catch(() => {});
+      await sqliteExec('DELETE FROM configurations').catch(() => {});
 
       // Insert Users
       for (const u of schema.users) {
@@ -608,13 +634,13 @@ export async function syncDataToDb(schema: DatabaseSchema): Promise<void> {
             id, date, fsc_id, allocation_id, opening_balance, auto_refill1, auto_refill2, auto_refill3, 
             ec_manual1, ec_manual2, closing_balance, previous_short, sale_total, sale_amount, short_amount, 
             opening_sim, sim, closing_sim, status, remarks, review_note, created_at, submitted_at, 
-            reviewed_at, created_by, submitted_by, reviewed_by
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            reviewed_at, created_by, submitted_by, reviewed_by, custom_fields
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             s.id, s.date, s.fscId, s.allocationId, s.openingBalance, s.autoRefill1, s.autoRefill2, s.autoRefill3,
             s.ecManual1, s.ecManual2, s.closingBalance, s.previousShort, s.saleTotal, s.saleAmount, s.shortAmount,
             s.openingSim, s.sim, s.closingSim, s.status, s.remarks, s.reviewNote, s.createdAt, s.submittedAt,
-            s.reviewedAt, s.createdBy, s.submittedBy, s.reviewedBy
+            s.reviewedAt, s.createdBy, s.submittedBy, s.reviewedBy, JSON.stringify(s.customFields || {})
           ]
         );
       }
@@ -651,6 +677,14 @@ export async function syncDataToDb(schema: DatabaseSchema): Promise<void> {
             ]
           );
         }
+      }
+
+      // Insert configurations
+      if (schema.configurations) {
+        await sqliteRun(
+          'INSERT INTO configurations (id, commission_percentage, sim_amount) VALUES (?, ?, ?)',
+          ['default', schema.configurations.commissionPercentage, schema.configurations.simAmount]
+        );
       }
 
       await sqliteExec('COMMIT');

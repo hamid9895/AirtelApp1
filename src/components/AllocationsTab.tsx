@@ -36,6 +36,7 @@ interface AllocationsTabProps {
   onCancelEdit: () => void;
 
   customFieldConfigs: CustomFieldConfig[];
+  globalConfig?: { commissionPercentage: number; simAmount: number } | null;
 }
 
 export const AllocationsTab: React.FC<AllocationsTabProps> = ({
@@ -67,7 +68,8 @@ export const AllocationsTab: React.FC<AllocationsTabProps> = ({
   onEditAllocationClick,
   editingAllocId,
   onCancelEdit,
-  customFieldConfigs
+  customFieldConfigs,
+  globalConfig
 }) => {
   // --- LOCAL NAVIGATION STATE ---
   // List-first separation as requested
@@ -81,6 +83,10 @@ export const AllocationsTab: React.FC<AllocationsTabProps> = ({
   // Find daily main stock for current date
   const selectedStock = dailyStocks.find(s => s.date === allocDate);
 
+  // Commission auto-deduction calculation
+  const commissionPercentage = globalConfig ? globalConfig.commissionPercentage : 3.0;
+  const commFactor = 1 + (commissionPercentage / 100);
+
   // Sum allocations already made to other FSCs on this date
   const otherAllocationsOnDate = allocations.filter(a => a.date === allocDate && a.id !== editingAllocId);
   const totalAllocatedToOthers = otherAllocationsOnDate.reduce((sum, a) => {
@@ -91,6 +97,9 @@ export const AllocationsTab: React.FC<AllocationsTabProps> = ({
   // Current values
   const currentAllocatedAmount = allocAutoRefill1 + allocAutoRefill2 + allocAutoRefill3 + allocEcManual1 + allocEcManual2;
   const currentSimCount = allocSim;
+
+  const netAllocationReturn = Math.round((currentAllocatedAmount / commFactor) * 100) / 100;
+  const netTotalToday = Math.round((allocOpeningBalance + (currentAllocatedAmount / commFactor)) * 100) / 100;
 
   // Main stock metrics
   const mainStockTotalCash = selectedStock ? (selectedStock.openingAmount + selectedStock.flexy + (selectedStock.flexyClaim1 || 0) + (selectedStock.flexyClaim2 || 0)) : 0;
@@ -362,23 +371,25 @@ export const AllocationsTab: React.FC<AllocationsTabProps> = ({
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className="text-[10px] font-extrabold uppercase text-slate-400">Opening Balance (₹)</label>
+                <label className="text-[10px] font-extrabold uppercase text-slate-400">Opening Balance (₹) [Read-Only]</label>
                 <input
                   type="number"
                   required
+                  disabled
                   value={allocOpeningBalance}
-                  onChange={(e) => setAllocOpeningBalance(Number(e.target.value))}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-[#EE1D23]"
+                  className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-xs font-extrabold text-slate-500 cursor-not-allowed opacity-75"
+                  title="Automatically calculated from previous day's closing balance"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-extrabold uppercase text-slate-400">Opening SIM Count</label>
+                <label className="text-[10px] font-extrabold uppercase text-slate-400">Opening SIM Count [Read-Only]</label>
                 <input
                   type="number"
                   required
+                  disabled
                   value={allocOpeningSim}
-                  onChange={(e) => setAllocOpeningSim(Number(e.target.value))}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-[#EE1D23]"
+                  className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-xs font-extrabold text-slate-500 cursor-not-allowed opacity-75"
+                  title="Automatically calculated from previous day's closing SIM count"
                 />
               </div>
             </div>
@@ -393,8 +404,8 @@ export const AllocationsTab: React.FC<AllocationsTabProps> = ({
                   <input
                     type="number"
                     required
-                    value={allocAutoRefill1}
-                    onChange={(e) => setAllocAutoRefill1(Number(e.target.value))}
+                    value={allocAutoRefill1 === 0 ? '' : allocAutoRefill1}
+                    onChange={(e) => setAllocAutoRefill1(e.target.value === '' ? 0 : Number(e.target.value))}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold"
                   />
                 </div>
@@ -403,8 +414,8 @@ export const AllocationsTab: React.FC<AllocationsTabProps> = ({
                   <input
                     type="number"
                     required
-                    value={allocAutoRefill2}
-                    onChange={(e) => setAllocAutoRefill2(Number(e.target.value))}
+                    value={allocAutoRefill2 === 0 ? '' : allocAutoRefill2}
+                    onChange={(e) => setAllocAutoRefill2(e.target.value === '' ? 0 : Number(e.target.value))}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold"
                   />
                 </div>
@@ -413,8 +424,8 @@ export const AllocationsTab: React.FC<AllocationsTabProps> = ({
                   <input
                     type="number"
                     required
-                    value={allocAutoRefill3}
-                    onChange={(e) => setAllocAutoRefill3(Number(e.target.value))}
+                    value={allocAutoRefill3 === 0 ? '' : allocAutoRefill3}
+                    onChange={(e) => setAllocAutoRefill3(e.target.value === '' ? 0 : Number(e.target.value))}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold"
                   />
                 </div>
@@ -431,8 +442,8 @@ export const AllocationsTab: React.FC<AllocationsTabProps> = ({
                   <input
                     type="number"
                     required
-                    value={allocEcManual1}
-                    onChange={(e) => setAllocEcManual1(Number(e.target.value))}
+                    value={allocEcManual1 === 0 ? '' : allocEcManual1}
+                    onChange={(e) => setAllocEcManual1(e.target.value === '' ? 0 : Number(e.target.value))}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold"
                   />
                 </div>
@@ -441,8 +452,8 @@ export const AllocationsTab: React.FC<AllocationsTabProps> = ({
                   <input
                     type="number"
                     required
-                    value={allocEcManual2}
-                    onChange={(e) => setAllocEcManual2(Number(e.target.value))}
+                    value={allocEcManual2 === 0 ? '' : allocEcManual2}
+                    onChange={(e) => setAllocEcManual2(e.target.value === '' ? 0 : Number(e.target.value))}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold"
                   />
                 </div>
@@ -450,12 +461,19 @@ export const AllocationsTab: React.FC<AllocationsTabProps> = ({
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-extrabold uppercase text-slate-400">Distributed SIM Cards count</label>
+              <div className="flex justify-between items-center">
+                <label className="text-[10px] font-extrabold uppercase text-slate-400">Distributed SIM Cards count</label>
+                {globalConfig && (
+                  <span className="text-[9px] text-[#EE1D23] font-extrabold bg-red-50 px-2 py-0.5 rounded-lg border border-red-100/50">
+                    SIM Rate: ₹{globalConfig.simAmount} (Total: ₹{(allocSim * globalConfig.simAmount).toLocaleString('en-IN')})
+                  </span>
+                )}
+              </div>
               <input
                 type="number"
                 required
-                value={allocSim}
-                onChange={(e) => setAllocSim(Number(e.target.value))}
+                value={allocSim === 0 ? '' : allocSim}
+                onChange={(e) => setAllocSim(e.target.value === '' ? 0 : Number(e.target.value))}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-[#EE1D23]"
               />
             </div>
@@ -477,6 +495,11 @@ export const AllocationsTab: React.FC<AllocationsTabProps> = ({
                       (₹{allocOpeningBalance} + ₹{currentAllocatedAmount})
                     </span>
                   </div>
+                  {globalConfig && (
+                    <p className="text-[9px] text-emerald-600 font-extrabold mt-0.5 uppercase tracking-wider">
+                      Net expected return: ₹{netTotalToday.toLocaleString('en-IN')} ({commissionPercentage}% commission auto-deducted)
+                    </p>
+                  )}
                 </div>
 
                 <div>

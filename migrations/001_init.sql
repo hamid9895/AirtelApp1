@@ -77,7 +77,8 @@ CREATE TABLE IF NOT EXISTS sales (
   reviewed_at TEXT,
   created_by TEXT,
   submitted_by TEXT,
-  reviewed_by TEXT
+  reviewed_by TEXT,
+  custom_fields TEXT
 );
 
 CREATE TABLE IF NOT EXISTS role_permissions (
@@ -95,4 +96,10 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   action TEXT NOT NULL,
   target_type TEXT NOT NULL,
   details TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS configurations (
+  id TEXT PRIMARY KEY,
+  commission_percentage REAL NOT NULL,
+  sim_amount REAL NOT NULL
 );

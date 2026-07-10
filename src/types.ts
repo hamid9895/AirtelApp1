@@ -78,6 +78,7 @@ export interface Sale {
   createdBy: string | null;
   submittedBy: string | null;
   reviewedBy: string | null;
+  customFields?: Record<string, string | number>;
 }
 
 export interface ReportSummary {

@@ -92,6 +92,7 @@ interface Sale {
   createdBy: string | null;
   submittedBy: string | null;
   reviewedBy: string | null;
+  customFields?: Record<string, string | number>;
 }
 
 interface RolePermission {
@@ -119,6 +120,7 @@ interface DatabaseSchema {
   customFieldConfigs: CustomFieldConfig[];
   rolePermissions?: RolePermission[];
   auditLogs?: AuditLogEntry[];
+  configurations?: { commissionPercentage: number; simAmount: number };
 }
 
 // --- PASSWORD HASHING ---
@@ -189,11 +191,11 @@ function loadDatabase(): DatabaseSchema {
       rolePermissions: [
         {
           role: 'Admin',
-          allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit']
+          allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit', 'configurations']
         },
         {
           role: 'Manager',
-          allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit']
+          allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit', 'configurations']
         },
         {
           role: 'Approver',
@@ -204,7 +206,11 @@ function loadDatabase(): DatabaseSchema {
           allowedTabs: ['dashboard', 'sales']
         }
       ],
-      auditLogs: []
+      auditLogs: [],
+      configurations: {
+        commissionPercentage: 3.0,
+        simAmount: 150.0
+      }
     };
     
     // Create Default Seed Users
@@ -239,11 +245,11 @@ function loadDatabase(): DatabaseSchema {
     parsed.rolePermissions = [
       {
         role: 'Admin',
-        allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit']
+        allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit', 'configurations']
       },
       {
         role: 'Manager',
-        allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit']
+        allowedTabs: ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'user-roles', 'masters-fsc', 'masters-stock', 'audit', 'configurations']
       },
       {
         role: 'Approver',
@@ -257,6 +263,12 @@ function loadDatabase(): DatabaseSchema {
   }
   if (!parsed.auditLogs) {
     parsed.auditLogs = [];
+  }
+  if (!parsed.configurations) {
+    parsed.configurations = {
+      commissionPercentage: 3.0,
+      simAmount: 150.0
+    };
   }
   memoryDb = parsed;
   return parsed;
@@ -995,6 +1007,33 @@ app.delete('/api/custom-fields/:id', authenticateToken, requireRole(['Admin', 'M
 });
 
 
+// 3.6 CONFIGURATION ENDPOINTS (Admin or Manager Only to edit, all to view)
+
+// GET /api/configurations
+app.get('/api/configurations', authenticateToken, (req, res) => {
+  const db = loadDatabase();
+  res.json({ success: true, configurations: db.configurations || { commissionPercentage: 3.0, simAmount: 150.0 } });
+});
+
+// POST /api/configurations
+app.post('/api/configurations', authenticateToken, requireRole(['Admin', 'Manager']), (req: any, res) => {
+  const { commissionPercentage, simAmount } = req.body;
+  if (commissionPercentage === undefined || simAmount === undefined) {
+    return res.status(400).json({ success: false, error: 'commissionPercentage and simAmount are required' });
+  }
+
+  const db = loadDatabase();
+  db.configurations = {
+    commissionPercentage: Number(commissionPercentage),
+    simAmount: Number(simAmount)
+  };
+
+  logAudit(db, req.user, 'UPDATE', 'customField', `Updated configurations: Commission = ${commissionPercentage}%, SIM Amount = ${simAmount}`);
+  saveDatabase(db);
+  res.json({ success: true, configurations: db.configurations });
+});
+
+
 // 4. SALES ENDPOINTS
 
 // GET /api/sale (All Auth Roles)
@@ -1058,7 +1097,7 @@ app.post('/api/sale', authenticateToken, (req: any, res) => {
     date, fscId, allocationId, openingBalance, 
     autoRefill1, autoRefill2, autoRefill3, 
     ecManual1, ecManual2, closingBalance, 
-    previousShort, saleAmount, openingSim, sim, closingSim, remarks 
+    previousShort, saleAmount, openingSim, sim, closingSim, remarks, customFields
   } = req.body;
   
   if (!date) {
@@ -1096,12 +1135,24 @@ app.post('/api/sale', authenticateToken, (req: any, res) => {
   const closeBal = Number(closingBalance || 0);
   const prevShort = Number(previousShort || 0);
   
+  // Commission auto-deduction
+  const commissionPct = db.configurations ? Number(db.configurations.commissionPercentage || 0) : 3.0;
+  const commFactor = 1 + (commissionPct / 100);
+  
+  const netAuto1 = auto1 / commFactor;
+  const netAuto2 = auto2 / commFactor;
+  const netAuto3 = auto3 / commFactor;
+  const netEc1 = ec1 / commFactor;
+  const netEc2 = ec2 / commFactor;
+  
   // Formulas
-  // Net sales should represent the total allocated airtime value minus closing balance
-  const saleTotal = openBal + auto1 + auto2 + auto3 + ec1 + ec2 - closeBal;
+  // Net sales should represent the total allocated airtime value (after commission auto-deduction) minus closing balance
+  const rawSaleTotal = openBal + netAuto1 + netAuto2 + netAuto3 + netEc1 + netEc2 - closeBal;
+  const saleTotal = Math.round(rawSaleTotal * 100) / 100;
   const netRemitted = Number(saleAmount || 0);
   // Shortage is the difference between sale total and net remitted, plus previous short
-  const shortAmount = Math.max(0, saleTotal - netRemitted) + prevShort;
+  const rawShortAmount = Math.max(0, saleTotal - netRemitted) + prevShort;
+  const shortAmount = Math.round(rawShortAmount * 100) / 100;
   
   const newSale: Sale = {
     id: `sale-${crypto.randomBytes(8).toString('hex')}`,
@@ -1130,7 +1181,8 @@ app.post('/api/sale', authenticateToken, (req: any, res) => {
     reviewedAt: null,
     createdBy: req.user.id,
     submittedBy: null,
-    reviewedBy: null
+    reviewedBy: null,
+    customFields: customFields || {}
   };
   
   db.sales.push(newSale);
@@ -1163,7 +1215,7 @@ app.put('/api/sale/:id', authenticateToken, (req: any, res) => {
   const { 
     openingBalance, autoRefill1, autoRefill2, autoRefill3, 
     ecManual1, ecManual2, closingBalance, 
-    previousShort, saleAmount, openingSim, sim, closingSim, remarks 
+    previousShort, saleAmount, openingSim, sim, closingSim, remarks, customFields 
   } = req.body;
   
   if (openingBalance !== undefined) current.openingBalance = Number(openingBalance);
@@ -1179,10 +1231,23 @@ app.put('/api/sale/:id', authenticateToken, (req: any, res) => {
   if (sim !== undefined) current.sim = Number(sim);
   if (closingSim !== undefined) current.closingSim = Number(closingSim);
   if (remarks !== undefined) current.remarks = remarks;
+  if (customFields !== undefined) current.customFields = customFields;
+  
+  // Commission auto-deduction
+  const commissionPct = db.configurations ? Number(db.configurations.commissionPercentage || 0) : 3.0;
+  const commFactor = 1 + (commissionPct / 100);
+  
+  const netAuto1 = current.autoRefill1 / commFactor;
+  const netAuto2 = current.autoRefill2 / commFactor;
+  const netAuto3 = current.autoRefill3 / commFactor;
+  const netEc1 = current.ecManual1 / commFactor;
+  const netEc2 = current.ecManual2 / commFactor;
   
   // Recompute math formulas
-  current.saleTotal = current.openingBalance + current.autoRefill1 + current.autoRefill2 + current.autoRefill3 + current.ecManual1 + current.ecManual2 - current.closingBalance;
-  current.shortAmount = Math.max(0, current.saleTotal - current.saleAmount) + current.previousShort;
+  const rawSaleTotal = current.openingBalance + netAuto1 + netAuto2 + netAuto3 + netEc1 + netEc2 - current.closingBalance;
+  current.saleTotal = Math.round(rawSaleTotal * 100) / 100;
+  const rawShortAmount = Math.max(0, current.saleTotal - current.saleAmount) + current.previousShort;
+  current.shortAmount = Math.round(rawShortAmount * 100) / 100;
   
   db.sales[idx] = current;
   const fscUser = db.users.find(u => u.id === current.fscId);
@@ -1434,6 +1499,124 @@ app.get('/api/audit-logs', authenticateToken, requireRole(['Admin', 'Manager']),
   const logs = db.auditLogs || [];
   const sortedLogs = [...logs].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   res.json({ success: true, auditLogs: sortedLogs });
+});
+
+
+// 10. ADMINISTRATOR SETTINGS - DYNAMIC TABLES ENDPOINTS (Admin Only)
+
+app.get('/api/admin/tables', authenticateToken, requireRole(['Admin']), (req, res) => {
+  const db = loadDatabase();
+  const tables = [
+    { name: 'users', label: 'Users', count: db.users.length, primaryKey: 'id' },
+    { name: 'dailyStocks', label: 'Daily Stock Ledger', count: db.dailyStocks.length, primaryKey: 'id' },
+    { name: 'allocations', label: 'FSC Allocations', count: db.allocations.length, primaryKey: 'id' },
+    { name: 'sales', label: 'FSC Sales Sheets', count: db.sales.length, primaryKey: 'id' },
+    { name: 'customFieldConfigs', label: 'Custom Field Configurations', count: db.customFieldConfigs.length, primaryKey: 'id' },
+    { name: 'rolePermissions', label: 'Role Permissions Matrix', count: (db.rolePermissions || []).length, primaryKey: 'role' },
+    { name: 'auditLogs', label: 'Audit Logs', count: (db.auditLogs || []).length, primaryKey: 'id' }
+  ];
+  res.json({ success: true, tables });
+});
+
+app.get('/api/admin/tables/:tableName', authenticateToken, requireRole(['Admin']), (req, res) => {
+  const { tableName } = req.params;
+  const db = loadDatabase() as any;
+  if (!db[tableName] || !Array.isArray(db[tableName])) {
+    return res.status(404).json({ success: false, error: `Table '${tableName}' not found or not editable as a table.` });
+  }
+  res.json({ success: true, rows: db[tableName] });
+});
+
+app.put('/api/admin/tables/:tableName/:rowId', authenticateToken, requireRole(['Admin']), (req: any, res) => {
+  const { tableName, rowId } = req.params;
+  const db = loadDatabase() as any;
+  if (!db[tableName] || !Array.isArray(db[tableName])) {
+    return res.status(404).json({ success: false, error: `Table '${tableName}' not found.` });
+  }
+  
+  const keyName = tableName === 'rolePermissions' ? 'role' : 'id';
+  const rowIndex = db[tableName].findIndex((row: any) => row[keyName] === rowId);
+  if (rowIndex === -1) {
+    return res.status(404).json({ success: false, error: `Row with ${keyName} = '${rowId}' not found.` });
+  }
+  
+  // Merge updated values (excluding primary keys to ensure integrity)
+  const original = db[tableName][rowIndex];
+  const updated = { ...original, ...req.body };
+  updated[keyName] = rowId; // Keep primary key unchanged
+  
+  db[tableName][rowIndex] = updated;
+  
+  let targetType: any = 'user';
+  if (tableName === 'dailyStocks') targetType = 'dailyStock';
+  else if (tableName === 'allocations') targetType = 'allocation';
+  else if (tableName === 'sales') targetType = 'sale';
+  else if (tableName === 'customFieldConfigs') targetType = 'customField';
+  else if (tableName === 'rolePermissions') targetType = 'rolePermission';
+  
+  logAudit(db, req.user, 'UPDATE_ROW', targetType, `Admin updated row in '${tableName}' where ${keyName} = '${rowId}'.`);
+  saveDatabase(db);
+  
+  res.json({ success: true, updated });
+});
+
+app.delete('/api/admin/tables/:tableName/:rowId', authenticateToken, requireRole(['Admin']), (req: any, res) => {
+  const { tableName, rowId } = req.params;
+  const db = loadDatabase() as any;
+  if (!db[tableName] || !Array.isArray(db[tableName])) {
+    return res.status(404).json({ success: false, error: `Table '${tableName}' not found.` });
+  }
+  
+  const keyName = tableName === 'rolePermissions' ? 'role' : 'id';
+  const rowIndex = db[tableName].findIndex((row: any) => row[keyName] === rowId);
+  if (rowIndex === -1) {
+    return res.status(404).json({ success: false, error: `Row with ${keyName} = '${rowId}' not found.` });
+  }
+  
+  db[tableName].splice(rowIndex, 1);
+  
+  let targetType: any = 'user';
+  if (tableName === 'dailyStocks') targetType = 'dailyStock';
+  else if (tableName === 'allocations') targetType = 'allocation';
+  else if (tableName === 'sales') targetType = 'sale';
+  else if (tableName === 'customFieldConfigs') targetType = 'customField';
+  else if (tableName === 'rolePermissions') targetType = 'rolePermission';
+  
+  logAudit(db, req.user, 'DELETE_ROW', targetType, `Admin deleted row in '${tableName}' where ${keyName} = '${rowId}'.`);
+  saveDatabase(db);
+  
+  res.json({ success: true, message: 'Row deleted successfully' });
+});
+
+app.post('/api/admin/tables/:tableName/bulk-delete', authenticateToken, requireRole(['Admin']), (req: any, res) => {
+  const { tableName } = req.params;
+  const { rowIds } = req.body; // Array of IDs or Roles
+  if (!rowIds || !Array.isArray(rowIds)) {
+    return res.status(400).json({ success: false, error: 'rowIds must be an array of primary key values.' });
+  }
+  
+  const db = loadDatabase() as any;
+  if (!db[tableName] || !Array.isArray(db[tableName])) {
+    return res.status(404).json({ success: false, error: `Table '${tableName}' not found.` });
+  }
+  
+  const keyName = tableName === 'rolePermissions' ? 'role' : 'id';
+  const initialCount = db[tableName].length;
+  
+  db[tableName] = db[tableName].filter((row: any) => !rowIds.includes(row[keyName]));
+  const deletedCount = initialCount - db[tableName].length;
+  
+  let targetType: any = 'user';
+  if (tableName === 'dailyStocks') targetType = 'dailyStock';
+  else if (tableName === 'allocations') targetType = 'allocation';
+  else if (tableName === 'sales') targetType = 'sale';
+  else if (tableName === 'customFieldConfigs') targetType = 'customField';
+  else if (tableName === 'rolePermissions') targetType = 'rolePermission';
+  
+  logAudit(db, req.user, 'BULK_DELETE', targetType, `Admin bulk-deleted ${deletedCount} rows in table '${tableName}'.`);
+  saveDatabase(db);
+  
+  res.json({ success: true, deletedCount, message: `Successfully deleted ${deletedCount} rows.` });
 });
 
 

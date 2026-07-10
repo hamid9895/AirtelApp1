@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DollarSign, Info, Users, AlertTriangle, Plus, ChevronLeft, Calendar, FileText, CheckCircle2, Trash2 } from 'lucide-react';
-import { Sale, UserDto } from '../types';
+import { Sale, UserDto, CustomFieldConfig, Allocation } from '../types';
 import { DataGrid, GridColumn } from './DataGrid';
 
 interface SalesTabProps {
@@ -10,7 +10,7 @@ interface SalesTabProps {
   user: UserDto;
   onDeleteSale: (id: string) => void;
   onSubmitSaleDraft: (id: string) => void;
-  onSubmitSaleForm: (e: React.FormEvent) => void;
+  onSubmitSaleForm: (e: React.FormEvent, customFields?: Record<string, string | number>) => void;
   onReviewSaleSubmit: (action: 'approve' | 'reject') => void;
   saleDate: string;
   setSaleDate: (v: string) => void;
@@ -46,9 +46,14 @@ interface SalesTabProps {
   onEditSaleClick: (sale: Sale) => void;
   editingSaleId: string | null;
   onCancelEdit: () => void;
+
+  customFieldConfigs: CustomFieldConfig[];
+  globalConfig?: { commissionPercentage: number; simAmount: number } | null;
+  allocations: Allocation[];
 }
 
 export const SalesTab: React.FC<SalesTabProps> = ({
+  sales,
   allUsers,
   fscUsersList,
   user,
@@ -87,21 +92,47 @@ export const SalesTab: React.FC<SalesTabProps> = ({
   setReviewNoteText,
   onEditSaleClick,
   editingSaleId,
-  onCancelEdit
+  onCancelEdit,
+  customFieldConfigs,
+  globalConfig,
+  allocations
 }) => {
   // --- LOCAL NAVIGATION STATE ---
   // List-first separated screen
   const [viewMode, setViewMode] = useState<'list' | 'add' | 'edit'>('list');
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
+  const [localCustomFields, setLocalCustomFields] = useState<Record<string, string | number>>({});
 
   // Sync component view mode with editing changes
   useEffect(() => {
     if (editingSaleId) {
       setViewMode('edit');
-    } else if (viewMode === 'edit') {
-      setViewMode('list');
+      const matchingSale = sales.find(s => s.id === editingSaleId);
+      if (matchingSale) {
+        setLocalCustomFields(matchingSale.customFields || {});
+      }
+    } else {
+      setLocalCustomFields({});
+      if (viewMode === 'edit') {
+        setViewMode('list');
+      }
     }
-  }, [editingSaleId]);
+  }, [editingSaleId, sales]);
+
+  // Dynamic carry-over of custom fields from allocation to sales form
+  useEffect(() => {
+    if (viewMode === 'add' && saleDate) {
+      const selectedFscId = user.role === 'FSC' ? user.id : saleFscId;
+      if (selectedFscId) {
+        const matchingAlloc = allocations.find(a => a.date === saleDate && a.fscId === selectedFscId);
+        if (matchingAlloc && matchingAlloc.customFields) {
+          setLocalCustomFields(matchingAlloc.customFields);
+        } else {
+          setLocalCustomFields({});
+        }
+      }
+    }
+  }, [saleDate, saleFscId, viewMode, allocations, user]);
 
   // --- SEPARATED HELPER FUNCTIONS & MATH EXPLANATIONS ---
 
@@ -126,8 +157,15 @@ export const SalesTab: React.FC<SalesTabProps> = ({
    */
   const handleFormSubmission = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmitSaleForm(e);
+    onSubmitSaleForm(e, localCustomFields);
     setViewMode('list');
+  };
+
+  const handleCustomFieldChange = (fieldId: string, value: string) => {
+    setLocalCustomFields(prev => ({
+      ...prev,
+      [fieldId]: value
+    }));
   };
 
   /**
@@ -340,6 +378,27 @@ export const SalesTab: React.FC<SalesTabProps> = ({
     }
   ];
 
+  const activeFscConfigs = customFieldConfigs.filter(c => c.target === 'fsc');
+  const dynamicColumns = activeFscConfigs.map(c => ({
+    key: `cf_${c.id}` as any,
+    label: `${c.name} (Custom)`,
+    type: 'string' as any,
+    sortable: false,
+    render: (r: any) => {
+      const val = r.customFields?.[c.id];
+      if (val === undefined || val === null || val === '') return <span className="text-slate-300">-</span>;
+      return <span className="text-slate-700 font-semibold text-xs">{val}</span>;
+    }
+  }));
+
+  const remarksIndex = saleColumns.findIndex(col => col.key === 'remarks');
+  const finalColumns = [...saleColumns];
+  if (remarksIndex !== -1) {
+    finalColumns.splice(remarksIndex, 0, ...dynamicColumns);
+  } else {
+    finalColumns.push(...dynamicColumns);
+  }
+
   return (
     <div className="space-y-6">
       
@@ -390,7 +449,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({
           {/* Core Paged Data Grid */}
           <DataGrid
             data={filteredSales}
-            columns={saleColumns}
+            columns={finalColumns}
             searchPlaceholder="Search sheets by FSC name or date (YYYY-MM-DD)..."
             searchKeys={['fscName', 'date', 'status']}
             onView={setSelectedSale}
@@ -514,8 +573,8 @@ export const SalesTab: React.FC<SalesTabProps> = ({
                   <input
                     type="number"
                     required
-                    value={saleClosingBalance}
-                    onChange={(e) => setSaleClosingBalance(Number(e.target.value))}
+                    value={saleClosingBalance === 0 ? '' : saleClosingBalance}
+                    onChange={(e) => setSaleClosingBalance(e.target.value === '' ? 0 : Number(e.target.value))}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold focus:outline-none focus:border-[#EE1D23]"
                   />
                 </div>
@@ -532,8 +591,8 @@ export const SalesTab: React.FC<SalesTabProps> = ({
                   <input
                     type="number"
                     required
-                    value={saleAmount}
-                    onChange={(e) => setSaleAmount(Number(e.target.value))}
+                    value={saleAmount === 0 ? '' : saleAmount}
+                    onChange={(e) => setSaleAmount(e.target.value === '' ? 0 : Number(e.target.value))}
                     className="w-full bg-white border border-[#EE1D23]/30 focus:border-[#EE1D23] rounded-xl px-3 py-2 text-xs font-black text-[#EE1D23]"
                   />
                 </div>
@@ -542,8 +601,8 @@ export const SalesTab: React.FC<SalesTabProps> = ({
                   <input
                     type="number"
                     required
-                    value={salePreviousShort}
-                    onChange={(e) => setSalePreviousShort(Number(e.target.value))}
+                    value={salePreviousShort === 0 ? '' : salePreviousShort}
+                    onChange={(e) => setSalePreviousShort(e.target.value === '' ? 0 : Number(e.target.value))}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none"
                   />
                 </div>
@@ -571,8 +630,8 @@ export const SalesTab: React.FC<SalesTabProps> = ({
                   <input
                     type="number"
                     required
-                    value={saleSim}
-                    onChange={(e) => setSaleSim(Number(e.target.value))}
+                    value={saleSim === 0 ? '' : saleSim}
+                    onChange={(e) => setSaleSim(e.target.value === '' ? 0 : Number(e.target.value))}
                     className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold"
                   />
                 </div>
@@ -581,13 +640,41 @@ export const SalesTab: React.FC<SalesTabProps> = ({
                   <input
                     type="number"
                     required
-                    value={saleClosingSim}
-                    onChange={(e) => setSaleClosingSim(Number(e.target.value))}
+                    value={saleClosingSim === 0 ? '' : saleClosingSim}
+                    onChange={(e) => setSaleClosingSim(e.target.value === '' ? 0 : Number(e.target.value))}
                     className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold"
                   />
                 </div>
               </div>
             </div>
+
+            {/* DYNAMIC CUSTOM FIELDS SECTION */}
+            {activeFscConfigs.length > 0 && (
+              <div className="space-y-4 bg-slate-50/50 p-4 rounded-2xl border border-slate-100/75">
+                <div className="flex items-center gap-1.5 border-b border-slate-200 pb-1.5">
+                  <Info className="w-3.5 h-3.5 text-[#EE1D23]" />
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                    Custom Fields (Information Only)
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {activeFscConfigs.map(c => (
+                    <div key={c.id} className="space-y-1">
+                      <label className="text-[10px] font-extrabold uppercase text-slate-500">
+                        {c.name}
+                      </label>
+                      <input
+                        type={c.type === 'number' ? 'number' : c.type === 'date' ? 'date' : 'text'}
+                        value={localCustomFields[c.id] || ''}
+                        onChange={(e) => handleCustomFieldChange(c.id, e.target.value)}
+                        placeholder={`Enter ${c.name.toLowerCase()}...`}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-[#EE1D23]"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Remarks / Notes */}
             <div className="space-y-1">
@@ -666,6 +753,26 @@ export const SalesTab: React.FC<SalesTabProps> = ({
                 <p className="font-extrabold text-emerald-600 mt-0.5">₹{selectedSaleToReview.saleAmount.toLocaleString('en-IN')}</p>
               </div>
             </div>
+
+            {/* Custom fields display in review modal */}
+            {activeFscConfigs.length > 0 && (
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100/75 space-y-2">
+                <span className="text-slate-400 font-bold uppercase text-[9px] tracking-wider block border-b border-slate-200 pb-1">
+                  Custom Information Fields
+                </span>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  {activeFscConfigs.map(c => {
+                    const val = selectedSaleToReview.customFields?.[c.id];
+                    return (
+                      <div key={c.id}>
+                        <span className="text-slate-400 font-extrabold uppercase text-[9px]">{c.name}</span>
+                        <p className="font-extrabold text-slate-800 mt-0.5">{val !== undefined && val !== null && val !== '' ? val : '-'}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="bg-amber-50/50 border border-amber-100 p-4 rounded-2xl space-y-1">
               <span className="text-amber-800 font-bold uppercase text-[9px]">Coordinator Notes</span>
@@ -777,6 +884,26 @@ export const SalesTab: React.FC<SalesTabProps> = ({
                   <p className="font-semibold text-slate-700">Op: {selectedSale.openingSim || 0} | Sold: {selectedSale.sim || 0} | Cl: {selectedSale.closingSim || 0}</p>
                 </div>
               </div>
+
+              {/* Custom fields display in details modal */}
+              {activeFscConfigs.length > 0 && (
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100/75 space-y-2">
+                  <span className="text-slate-400 font-black uppercase text-[9px] tracking-widest block border-b border-slate-200 pb-1">
+                    Custom Fields Information
+                  </span>
+                  <div className="grid grid-cols-2 gap-4 text-xs">
+                    {activeFscConfigs.map(c => {
+                      const val = selectedSale.customFields?.[c.id];
+                      return (
+                        <div key={c.id}>
+                          <span className="text-slate-400 font-extrabold uppercase text-[9px]">{c.name}</span>
+                          <p className="font-bold text-slate-800 mt-0.5">{val !== undefined && val !== null && val !== '' ? val : '-'}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Remarks Box */}
               <div className="space-y-3">
