@@ -410,20 +410,18 @@ export const AllocationsTab: React.FC<AllocationsTabProps> = ({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[8px] font-extrabold uppercase text-slate-400">Batch 2 (₹)</label>
+                  <label className="text-[8px] font-extrabold uppercase text-slate-400">Batch 2 (₹) (Optional)</label>
                   <input
                     type="number"
-                    required
                     value={allocAutoRefill2 === 0 ? '' : allocAutoRefill2}
                     onChange={(e) => setAllocAutoRefill2(e.target.value === '' ? 0 : Number(e.target.value))}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[8px] font-extrabold uppercase text-slate-400">Batch 3 (₹)</label>
+                  <label className="text-[8px] font-extrabold uppercase text-slate-400">Batch 3 (₹) (Optional)</label>
                   <input
                     type="number"
-                    required
                     value={allocAutoRefill3 === 0 ? '' : allocAutoRefill3}
                     onChange={(e) => setAllocAutoRefill3(e.target.value === '' ? 0 : Number(e.target.value))}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold"
@@ -438,20 +436,18 @@ export const AllocationsTab: React.FC<AllocationsTabProps> = ({
               
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="text-[8px] font-extrabold uppercase text-slate-400">EC topup 1 (₹)</label>
+                  <label className="text-[8px] font-extrabold uppercase text-slate-400">EC topup 1 (₹) (Optional)</label>
                   <input
                     type="number"
-                    required
                     value={allocEcManual1 === 0 ? '' : allocEcManual1}
                     onChange={(e) => setAllocEcManual1(e.target.value === '' ? 0 : Number(e.target.value))}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[8px] font-extrabold uppercase text-slate-400">EC topup 2 (₹)</label>
+                  <label className="text-[8px] font-extrabold uppercase text-slate-400">EC topup 2 (₹) (Optional)</label>
                   <input
                     type="number"
-                    required
                     value={allocEcManual2 === 0 ? '' : allocEcManual2}
                     onChange={(e) => setAllocEcManual2(e.target.value === '' ? 0 : Number(e.target.value))}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold"

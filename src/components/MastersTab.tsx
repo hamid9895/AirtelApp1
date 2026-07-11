@@ -5,9 +5,10 @@ import { CustomFieldConfig } from '../types';
 interface MastersTabProps {
   target: 'fsc' | 'stock';
   token: string | null;
+  showConfirm?: (title: string, message: string, onConfirm: () => void) => void;
 }
 
-export const MastersTab: React.FC<MastersTabProps> = ({ target, token }) => {
+export const MastersTab: React.FC<MastersTabProps> = ({ target, token, showConfirm }) => {
   const apiFetch = (window as any).appFetch || window.fetch;
   const [configs, setConfigs] = useState<CustomFieldConfig[]>([]);
   const [loading, setLoading] = useState(false);
@@ -82,29 +83,40 @@ export const MastersTab: React.FC<MastersTabProps> = ({ target, token }) => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this custom field? This will also remove the saved information in existing entries.')) {
-      return;
-    }
-    setError(null);
-    setSuccess(null);
+    const runDelete = async () => {
+      setError(null);
+      setSuccess(null);
 
-    try {
-      const res = await apiFetch(`/api/custom-fields/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
+      try {
+        const res = await apiFetch(`/api/custom-fields/${id}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        const data = await res.json();
+        if (data.success) {
+          setSuccess('Custom field config removed successfully');
+          fetchConfigs();
+        } else {
+          setError(data.error || 'Failed to delete custom field config');
         }
-      });
-      const data = await res.json();
-      if (data.success) {
-        setSuccess('Custom field config removed successfully');
-        fetchConfigs();
-      } else {
-        setError(data.error || 'Failed to delete custom field config');
+      } catch (err) {
+        console.error(err);
+        setError('Connection error while deleting custom field');
       }
-    } catch (err) {
-      console.error(err);
-      setError('Connection error while deleting custom field');
+    };
+
+    if (showConfirm) {
+      showConfirm(
+        'Confirm Field Deletion',
+        'Are you sure you want to delete this custom field? This will also remove the saved information in existing entries.',
+        runDelete
+      );
+    } else {
+      if (window.confirm('Are you sure you want to delete this custom field? This will also remove the saved information in existing entries.')) {
+        runDelete();
+      }
     }
   };
 

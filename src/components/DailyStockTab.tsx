@@ -296,20 +296,18 @@ export const DailyStockTab: React.FC<DailyStockTabProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="text-[9px] font-extrabold uppercase text-slate-400">Claim Batch 1 (₹)</label>
+                  <label className="text-[9px] font-extrabold uppercase text-slate-400">Claim Batch 1 (₹) (Optional)</label>
                   <input
                     type="number"
-                    required
                     value={stockFlexyClaim1 === 0 ? '' : stockFlexyClaim1}
                     onChange={(e) => setStockFlexyClaim1(e.target.value === '' ? 0 : Number(e.target.value))}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-[#EE1D23]"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[9px] font-extrabold uppercase text-slate-400">Claim Batch 2 (₹)</label>
+                  <label className="text-[9px] font-extrabold uppercase text-slate-400">Claim Batch 2 (₹) (Optional)</label>
                   <input
                     type="number"
-                    required
                     value={stockFlexyClaim2 === 0 ? '' : stockFlexyClaim2}
                     onChange={(e) => setStockFlexyClaim2(e.target.value === '' ? 0 : Number(e.target.value))}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-[#EE1D23]"
@@ -319,10 +317,9 @@ export const DailyStockTab: React.FC<DailyStockTabProps> = ({
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-extrabold uppercase text-slate-400">SIM Cards Total Count</label>
+              <label className="text-[10px] font-extrabold uppercase text-slate-400">SIM Cards Total Count (Optional)</label>
               <input
                 type="number"
-                required
                 value={stockSim === 0 ? '' : stockSim}
                 onChange={(e) => setStockSim(e.target.value === '' ? 0 : Number(e.target.value))}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-[#EE1D23]"

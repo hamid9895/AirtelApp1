@@ -21,6 +21,14 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   criticalAirtelAlerts,
   setActiveTab
 }) => {
+  const growth = React.useMemo(() => {
+    if (!dailyStocks || dailyStocks.length < 2) return null;
+    const current = dailyStocks[0].openingAmount;
+    const previous = dailyStocks[1].openingAmount;
+    if (previous === 0) return 0;
+    return ((current - previous) / previous) * 100;
+  }, [dailyStocks]);
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-6 flex-grow">
       
@@ -35,9 +43,15 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               <p className="text-5xl font-black text-slate-900 tracking-tight mt-1">
                 ₹{totalStockOnHandAmount.toLocaleString('en-IN')}
               </p>
-              <p className="text-emerald-500 text-xs font-semibold mt-1">
-                ↑ 14.2% from last accounting cycle
-              </p>
+              {growth !== null ? (
+                <p className={`text-xs font-semibold mt-1 ${growth >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                  {growth >= 0 ? '↑' : '↓'} {Math.abs(growth).toFixed(1)}% from last daily stock
+                </p>
+              ) : (
+                <p className="text-slate-400 text-xs font-semibold mt-1">
+                  No historical cycle data
+                </p>
+              )}
             </div>
             <span className="bg-[#EE1D23]/10 text-[#EE1D23] px-3 py-1 rounded-full text-[9px] font-extrabold uppercase tracking-wide">
               Live Stock
@@ -48,13 +62,13 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
               <p className="text-slate-400 text-[10px] font-bold uppercase">Flexy Balance</p>
               <p className="text-lg font-extrabold text-slate-800 mt-0.5">
-                ₹{(dailyStocks[0]?.flexy || 105000).toLocaleString('en-IN')}
+                ₹{(dailyStocks[0]?.flexy ?? 0).toLocaleString('en-IN')}
               </p>
             </div>
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
               <p className="text-slate-400 text-[10px] font-bold uppercase">SIM Inventory</p>
               <p className="text-lg font-extrabold text-slate-800 mt-0.5">
-                {dailyStocks[0]?.sim || 350} Units
+                {(dailyStocks[0]?.sim ?? 0)} Units
               </p>
             </div>
           </div>

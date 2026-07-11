@@ -47,6 +47,24 @@ export default function App() {
   const [loading, setLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
+
+  const showConfirm = (title: string, message: string, onConfirm: () => void) => {
+    setConfirmModal({
+      isOpen: true,
+      title,
+      message,
+      onConfirm: () => {
+        onConfirm();
+        setConfirmModal(null);
+      }
+    });
+  };
   const [isStandaloneMode, setIsStandaloneMode] = useState<boolean>(false);
   const [dbStatus, setDbStatus] = useState<DbStatusDto | null>(null);
 
@@ -734,25 +752,30 @@ export default function App() {
 
   // Delete ledger entry (stock, allocation, sales)
   const handleDeleteEntity = async (type: 'stock' | 'allocation' | 'sale', id: string) => {
-    if (!window.confirm(`Are you sure you want to permanently delete this ${type} record?`)) return;
-    setErrorMsg(null);
-    setSuccessMsg(null);
-    try {
-      const endpoint = type === 'stock' ? `/api/stock/${id}` : type === 'allocation' ? `/api/allocation/${id}` : `/api/sale/${id}`;
-      const res = await fetch(endpoint, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.status === 204 || res.status === 200) {
-        setSuccessMsg(`${type.toUpperCase()} log removed from records successfully.`);
-        loadTabContent();
-      } else {
-        const data = await res.json().catch(() => ({ error: 'Error on deletion' }));
-        setErrorMsg(data.error || 'Failed to remove entry.');
+    showConfirm(
+      'Confirm Deletion',
+      `Are you sure you want to permanently delete this ${type} record? This action is irreversible.`,
+      async () => {
+        setErrorMsg(null);
+        setSuccessMsg(null);
+        try {
+          const endpoint = type === 'stock' ? `/api/stock/${id}` : type === 'allocation' ? `/api/allocation/${id}` : `/api/sale/${id}`;
+          const res = await fetch(endpoint, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (res.status === 204 || res.status === 200) {
+            setSuccessMsg(`${type.toUpperCase()} log removed from records successfully.`);
+            loadTabContent();
+          } else {
+            const data = await res.json().catch(() => ({ error: 'Error on deletion' }));
+            setErrorMsg(data.error || 'Failed to remove entry.');
+          }
+        } catch (e) {
+          setErrorMsg('Deletion request timed out.');
+        }
       }
-    } catch (e) {
-      setErrorMsg('Deletion request timed out.');
-    }
+    );
   };
 
   // Compile Reconciliation Summaries
@@ -856,22 +879,27 @@ export default function App() {
 
   // Delete Staff Account
   const handleDeleteUser = async (userId: string) => {
-    if (!window.confirm('Are you sure you want to permanently delete this user account?')) return;
-    setErrorMsg(null);
-    try {
-      const res = await fetch(`/api/auth/users/${userId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.status === 204) {
-        setSuccessMsg('Account purged successfully.');
-        loadTabContent();
-      } else {
-        setErrorMsg('Purging credentials rejected by administrative policy.');
+    showConfirm(
+      'Confirm User Deletion',
+      'Are you sure you want to permanently delete this user account? This will orphan any linked references.',
+      async () => {
+        setErrorMsg(null);
+        try {
+          const res = await fetch(`/api/auth/users/${userId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (res.status === 204) {
+            setSuccessMsg('Account purged successfully.');
+            loadTabContent();
+          } else {
+            setErrorMsg('Purging credentials rejected by administrative policy.');
+          }
+        } catch (e) {
+          setErrorMsg('Account deletion timed out.');
+        }
       }
-    } catch (e) {
-      setErrorMsg('Account deletion timed out.');
-    }
+    );
   };
 
   // --- QUERY FILTER CALCULATIONS ---
@@ -887,12 +915,39 @@ export default function App() {
     return matchSearch && matchStatus;
   });
 
-  const totalStockOnHandAmount = dailyStocks[0]?.openingAmount || 142805;
-  const totalActiveAgentsCount = fscUsersList.length || 12;
-  const criticalAirtelAlerts = [
-    { item: 'SIM cards inventory', threshold: '50 units', hub: 'NCR Hub North', level: 'rose' },
-    { item: 'Flexy Airtime Balance', threshold: '₹12,000 threshold', hub: 'East Hub East', level: 'amber' }
-  ];
+  const totalStockOnHandAmount = dailyStocks[0]?.openingAmount ?? 0;
+  const totalActiveAgentsCount = fscUsersList.length;
+
+  const criticalAirtelAlerts = React.useMemo(() => {
+    const alerts = [];
+    const latestStock = dailyStocks[0];
+    if (latestStock) {
+      if (latestStock.sim < 100) {
+        alerts.push({
+          item: 'SIM cards inventory',
+          threshold: `${latestStock.sim} units`,
+          hub: 'NCR Hub North',
+          level: latestStock.sim < 50 ? 'rose' : 'amber'
+        });
+      }
+      if (latestStock.flexy < 20000) {
+        alerts.push({
+          item: 'Flexy Airtime Balance',
+          threshold: `₹${latestStock.flexy.toLocaleString('en-IN')}`,
+          hub: 'East Hub East',
+          level: latestStock.flexy < 10000 ? 'rose' : 'amber'
+        });
+      }
+    } else {
+      alerts.push({
+        item: 'No Daily Stock Registered',
+        threshold: '0 items',
+        hub: 'All Hubs',
+        level: 'rose'
+      });
+    }
+    return alerts;
+  }, [dailyStocks]);
 
   // Render Login panel if unauthenticated
   if (!token || !user) {
@@ -1131,6 +1186,7 @@ export default function App() {
           <MastersTab
             target="fsc"
             token={token}
+            showConfirm={showConfirm}
           />
         )}
 
@@ -1139,6 +1195,7 @@ export default function App() {
           <MastersTab
             target="stock"
             token={token}
+            showConfirm={showConfirm}
           />
         )}
 
@@ -1169,7 +1226,39 @@ export default function App() {
         {activeTab === 'admin-tables' && user.role === 'Admin' && (
           <TablesTab
             token={token}
+            showConfirm={showConfirm}
           />
+        )}
+
+        {/* Custom Overlay confirmation dialog */}
+        {confirmModal && confirmModal.isOpen && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in" id="confirm-delete-modal">
+            <div className="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border border-slate-100 flex flex-col p-6 space-y-4">
+              <div className="flex items-center gap-3 text-amber-500 border-b border-slate-100 pb-3">
+                <span className="p-2 bg-amber-50 rounded-2xl text-lg leading-none">⚠️</span>
+                <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-tight">{confirmModal.title}</h3>
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed font-semibold">
+                {confirmModal.message}
+              </p>
+              <div className="flex justify-end gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setConfirmModal(null)}
+                  className="border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold px-4 py-2 rounded-xl text-xs transition-colors cursor-pointer select-none"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmModal.onConfirm}
+                  className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-4 py-2 rounded-xl text-xs transition-all shadow-md cursor-pointer select-none"
+                >
+                  Confirm Delete
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
       </main>

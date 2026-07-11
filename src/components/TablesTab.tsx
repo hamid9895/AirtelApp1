@@ -3,6 +3,7 @@ import { Trash2, Edit2, Search, Database, ArrowUpDown, ChevronDown, RefreshCw, X
 
 interface TablesTabProps {
   token: string | null;
+  showConfirm?: (title: string, message: string, onConfirm: () => void) => void;
 }
 
 interface TableMetadata {
@@ -12,7 +13,7 @@ interface TableMetadata {
   primaryKey: string;
 }
 
-export const TablesTab: React.FC<TablesTabProps> = ({ token }) => {
+export const TablesTab: React.FC<TablesTabProps> = ({ token, showConfirm }) => {
   const apiFetch = (window as any).appFetch || window.fetch;
   
   const [tables, setTables] = useState<TableMetadata[]>([]);
@@ -137,56 +138,79 @@ export const TablesTab: React.FC<TablesTabProps> = ({ token }) => {
 
   // Delete actions
   const handleDeleteRow = async (rowId: string) => {
-    if (!window.confirm(`Are you absolutely sure you want to delete this row from '${activeTable.label}'? This bypasses standard referential checks!`)) {
-      return;
-    }
-    setError(null);
-    setSuccess(null);
-    try {
-      const res = await apiFetch(`/api/admin/tables/${selectedTableName}/${rowId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (data.success) {
-        setSuccess('Row deleted successfully');
-        handleRefresh();
-      } else {
-        setError(data.error || 'Failed to delete row');
+    const runDelete = async () => {
+      setError(null);
+      setSuccess(null);
+      try {
+        const res = await apiFetch(`/api/admin/tables/${selectedTableName}/${rowId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.success) {
+          setSuccess('Row deleted successfully');
+          handleRefresh();
+        } else {
+          setError(data.error || 'Failed to delete row');
+        }
+      } catch (err) {
+        console.error(err);
+        setError('Connection error while deleting row');
       }
-    } catch (err) {
-      console.error(err);
-      setError('Connection error while deleting row');
+    };
+
+    if (showConfirm) {
+      showConfirm(
+        'Confirm Row Deletion',
+        `Are you absolutely sure you want to delete this row from '${activeTable.label}'? This bypasses standard referential checks!`,
+        runDelete
+      );
+    } else {
+      if (window.confirm(`Are you absolutely sure you want to delete this row from '${activeTable.label}'? This bypasses standard referential checks!`)) {
+        runDelete();
+      }
     }
   };
 
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
-    if (!window.confirm(`Are you absolutely sure you want to BULK DELETE ${selectedIds.length} rows from '${activeTable.label}'? This is irreversible and can impact ledger balances.`)) {
-      return;
-    }
-    setError(null);
-    setSuccess(null);
-    try {
-      const res = await apiFetch(`/api/admin/tables/${selectedTableName}/bulk-delete`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ rowIds: selectedIds })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setSuccess(`Successfully deleted ${data.deletedCount} rows.`);
-        setSelectedIds([]);
-        handleRefresh();
-      } else {
-        setError(data.error || 'Failed to perform bulk deletion');
+    
+    const runBulkDelete = async () => {
+      setError(null);
+      setSuccess(null);
+      try {
+        const res = await apiFetch(`/api/admin/tables/${selectedTableName}/bulk-delete`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ rowIds: selectedIds })
+        });
+        const data = await res.json();
+        if (data.success) {
+          setSuccess(`Successfully deleted ${data.deletedCount} rows.`);
+          setSelectedIds([]);
+          handleRefresh();
+        } else {
+          setError(data.error || 'Failed to perform bulk deletion');
+        }
+      } catch (err) {
+        console.error(err);
+        setError('Connection error while bulk deleting rows');
       }
-    } catch (err) {
-      console.error(err);
-      setError('Connection error while bulk deleting rows');
+    };
+
+    if (showConfirm) {
+      showConfirm(
+        'Confirm Bulk Deletion',
+        `Are you absolutely sure you want to BULK DELETE ${selectedIds.length} rows from '${activeTable.label}'? This is irreversible and can impact ledger balances.`,
+        runBulkDelete
+      );
+    } else {
+      if (window.confirm(`Are you absolutely sure you want to BULK DELETE ${selectedIds.length} rows from '${activeTable.label}'? This is irreversible and can impact ledger balances.`)) {
+        runBulkDelete();
+      }
     }
   };
 
