@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS sales (
   ec_manual2 REAL NOT NULL,
   closing_balance REAL NOT NULL,
   previous_short REAL NOT NULL,
+  today_short REAL NOT NULL DEFAULT 0,
   sale_total REAL NOT NULL,
   sale_amount REAL NOT NULL,
   short_amount REAL NOT NULL,

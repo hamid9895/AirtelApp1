@@ -230,7 +230,7 @@ export function DataGrid<T extends { id?: string | number; [key: string]: any }>
       </div>
 
       {/* 2. MAIN DATA TABLE */}
-      <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-slate-50/20">
+      <div className="hidden md:block overflow-x-auto rounded-2xl border border-slate-100 bg-slate-50/20">
         <table className="w-full text-left text-xs border-collapse">
           <thead>
             <tr className="bg-slate-50 text-[9px] text-slate-400 font-extrabold uppercase tracking-widest border-b border-slate-100 select-none">
@@ -331,6 +331,99 @@ export function DataGrid<T extends { id?: string | number; [key: string]: any }>
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* 2.5 MOBILE CARD VIEWS (Block on small screens, hidden on desktop) */}
+      <div className="block md:hidden space-y-4">
+        {paginatedData.map((row, rowIdx) => {
+          const rowId = row.id || rowIdx;
+          const firstCol = columns[0];
+          const restColumns = columns.slice(1);
+          
+          return (
+            <div key={rowId} className="bg-slate-50/40 border border-slate-200/60 rounded-2xl p-4 flex flex-col gap-3 hover:bg-slate-50 transition-colors">
+              {/* Header row of the card */}
+              <div className="flex justify-between items-start border-b border-slate-100 pb-2">
+                <div>
+                  <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">
+                    {firstCol.label}
+                  </span>
+                  <div className="text-xs font-black text-slate-900 mt-0.5">
+                    {firstCol.render ? firstCol.render(row) : String(row[firstCol.key] ?? '')}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Grid of other fields */}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                {restColumns.map((col) => {
+                  const cellVal = row[col.key];
+                  return (
+                    <div key={col.key} className="flex flex-col">
+                      <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">
+                        {col.label}
+                      </span>
+                      <div className="text-xs font-semibold text-slate-800 mt-0.5">
+                        {col.render ? (
+                          col.render(row)
+                        ) : col.type === 'currency' ? (
+                          <span className="font-bold text-slate-900">
+                            ₹{Number(cellVal || 0).toLocaleString('en-IN')}
+                          </span>
+                        ) : col.type === 'date' ? (
+                          <span className="font-bold text-slate-800">{String(cellVal || '')}</span>
+                        ) : (
+                          String(cellVal ?? '')
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              
+              {/* Actions row if present */}
+              {(onView || onEdit || onDelete) && (
+                <div className="flex justify-end items-center gap-2 pt-2.5 border-t border-slate-100 mt-1">
+                  {onView && (
+                    <button
+                      onClick={() => onView(row)}
+                      className="flex-1 max-w-[80px] bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-[10px] py-1.5 px-2 rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>View</span>
+                    </button>
+                  )}
+                  {onEdit && (!canEdit || canEdit(row)) && (
+                    <button
+                      onClick={() => onEdit(row)}
+                      className="flex-1 max-w-[80px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[10px] py-1.5 px-2 rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <Edit2 className="w-3 h-3" />
+                      <span>Edit</span>
+                    </button>
+                  )}
+                  {onDelete && (!canDelete || canDelete(row)) && (
+                    <button
+                      onClick={() => onDelete(row)}
+                      className="flex-1 max-w-[80px] bg-rose-50 hover:bg-red-100 text-[#EE1D23] font-bold text-[10px] py-1.5 px-2 rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>Delete</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        
+        {/* Empty Fallback */}
+        {totalItems === 0 && (
+          <div className="p-8 text-center bg-slate-50/50 border border-slate-100 rounded-2xl">
+            <span className="text-xs font-bold text-slate-800 block">No matching records found</span>
+            <span className="text-[10px] text-slate-400">Try adjusting your filters or search.</span>
+          </div>
+        )}
       </div>
 
       {/* 3. GRID FOOTER PAGINATION CONTROLLS */}

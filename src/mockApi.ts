@@ -82,19 +82,30 @@ const STORAGE_KEYS = {
   CONFIGURATIONS: 'airtel_mock_configurations'
 };
 
+function isValidJson(str: string | null): boolean {
+  if (!str) return false;
+  if (str === 'undefined' || str === 'null') return false;
+  try {
+    JSON.parse(str);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Seed default accounts if they don't exist
 export function initializeMockDatabase() {
   const yesterdayStr = new Date(Date.now() - 24 * 3600 * 1000).toISOString().split('T')[0];
   const todayStr = new Date().toISOString().split('T')[0];
 
-  if (!localStorage.getItem(STORAGE_KEYS.CONFIGURATIONS)) {
+  if (!isValidJson(localStorage.getItem(STORAGE_KEYS.CONFIGURATIONS))) {
     localStorage.setItem(STORAGE_KEYS.CONFIGURATIONS, JSON.stringify({
       commissionPercentage: 3.0,
       simAmount: 150.0
     }));
   }
 
-  if (!localStorage.getItem(STORAGE_KEYS.USERS)) {
+  if (!isValidJson(localStorage.getItem(STORAGE_KEYS.USERS))) {
     const users: User[] = [
       {
         id: 'user-admin-id',
@@ -145,19 +156,19 @@ export function initializeMockDatabase() {
     localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
   }
 
-  if (!localStorage.getItem(STORAGE_KEYS.STOCKS)) {
+  if (!isValidJson(localStorage.getItem(STORAGE_KEYS.STOCKS))) {
     localStorage.setItem(STORAGE_KEYS.STOCKS, JSON.stringify([]));
   }
 
-  if (!localStorage.getItem(STORAGE_KEYS.ALLOCATIONS)) {
+  if (!isValidJson(localStorage.getItem(STORAGE_KEYS.ALLOCATIONS))) {
     localStorage.setItem(STORAGE_KEYS.ALLOCATIONS, JSON.stringify([]));
   }
 
-  if (!localStorage.getItem(STORAGE_KEYS.SALES)) {
+  if (!isValidJson(localStorage.getItem(STORAGE_KEYS.SALES))) {
     localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify([]));
   }
 
-  if (!localStorage.getItem(STORAGE_KEYS.ROLE_PERMISSIONS)) {
+  if (!isValidJson(localStorage.getItem(STORAGE_KEYS.ROLE_PERMISSIONS))) {
     const permissions = [
       {
         role: 'Admin',
@@ -179,7 +190,7 @@ export function initializeMockDatabase() {
     localStorage.setItem(STORAGE_KEYS.ROLE_PERMISSIONS, JSON.stringify(permissions));
   }
 
-  if (!localStorage.getItem(STORAGE_KEYS.AUDIT_LOGS)) {
+  if (!isValidJson(localStorage.getItem(STORAGE_KEYS.AUDIT_LOGS))) {
     localStorage.setItem(STORAGE_KEYS.AUDIT_LOGS, JSON.stringify([]));
   }
 }
@@ -203,12 +214,44 @@ function logMockAudit(user: any, action: string, targetType: string, details: st
 
 // Helper to access mock lists
 function getMockList<T>(key: string): T[] {
-  const data = localStorage.getItem(key);
-  return data ? JSON.parse(data) : [];
+  try {
+    const data = localStorage.getItem(key);
+    if (!data) return [];
+    // Handle literal "undefined" or malformed text stored in localStorage
+    if (data === 'undefined' || data === 'null') return [];
+    const parsed = JSON.parse(data);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    console.error(`Error parsing mock list for key "${key}":`, err);
+    return [];
+  }
 }
 
 function saveMockList<T>(key: string, list: T[]) {
-  localStorage.setItem(key, JSON.stringify(list));
+  try {
+    localStorage.setItem(key, JSON.stringify(list));
+  } catch (err) {
+    console.error(`Error saving mock list for key "${key}":`, err);
+  }
+}
+
+// Helper to access configurations safely
+function getConfigurations(): { commissionPercentage: number; simAmount: number } {
+  try {
+    const data = localStorage.getItem(STORAGE_KEYS.CONFIGURATIONS);
+    if (data && data !== 'undefined' && data !== 'null') {
+      const parsed = JSON.parse(data);
+      if (parsed && typeof parsed === 'object') {
+        return {
+          commissionPercentage: Number(parsed.commissionPercentage) ?? 3.0,
+          simAmount: Number(parsed.simAmount) ?? 150.0
+        };
+      }
+    }
+  } catch (err) {
+    console.error('Error parsing configurations:', err);
+  }
+  return { commissionPercentage: 3.0, simAmount: 150.0 };
 }
 
 // Generate unique mock ID
@@ -254,7 +297,18 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
   const queryParams = new URLSearchParams(url.includes('?') ? url.split('?')[1] : '');
   const method = options?.method || 'GET';
   const headers = options?.headers;
-  const body = options?.body ? JSON.parse(options.body as string) : null;
+  let body = null;
+  if (options?.body) {
+    try {
+      if (typeof options.body === 'string') {
+        body = JSON.parse(options.body);
+      } else {
+        body = options.body;
+      }
+    } catch (err) {
+      console.error('Error parsing JSON request body:', err);
+    }
+  }
 
   // Simulate delay
   await new Promise(resolve => setTimeout(resolve, 150));
@@ -545,6 +599,12 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
         return mockResponse({ success: false, error: 'Insufficient permissions' }, 403);
       }
 
+      const sales = getMockList<Sale>(STORAGE_KEYS.SALES);
+      const existingSale = sales.find(s => s.date === body.date && s.fscId === body.fscId);
+      if (existingSale) {
+        return mockResponse({ success: false, error: 'Cannot add allocation because a sales sheet has already been created for this FSC on this date' }, 400);
+      }
+
       const allocations = getMockList<Allocation>(STORAGE_KEYS.ALLOCATIONS);
       const totalAllocated = Number(body.openingBalance) + 
                              Number(body.autoRefill1) + Number(body.autoRefill2) + Number(body.autoRefill3) + 
@@ -582,6 +642,17 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
 
     const allocId = cleanUrl.substring('/api/allocation/'.length);
     let allocations = getMockList<Allocation>(STORAGE_KEYS.ALLOCATIONS);
+    const allocation = allocations.find(a => a.id === allocId);
+    if (!allocation) {
+      return mockResponse({ success: false, error: 'Allocation not found' }, 404);
+    }
+
+    const sales = getMockList<Sale>(STORAGE_KEYS.SALES);
+    const existingSale = sales.find(s => s.date === allocation.date && s.fscId === allocation.fscId);
+    if (existingSale) {
+      return mockResponse({ success: false, error: 'Cannot delete allocation because a sales sheet has already been created for this FSC on this date' }, 400);
+    }
+
     allocations = allocations.filter(a => a.id !== allocId);
     saveMockList(STORAGE_KEYS.ALLOCATIONS, allocations);
 
@@ -601,6 +672,13 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
     if (idx === -1) return mockResponse({ success: false, error: 'Allocation not found' }, 404);
 
     const current = allocations[idx];
+
+    const sales = getMockList<Sale>(STORAGE_KEYS.SALES);
+    const existingSale = sales.find(s => s.date === current.date && s.fscId === current.fscId);
+    if (existingSale) {
+      return mockResponse({ success: false, error: 'Cannot update allocation because a sales sheet has already been created for this FSC on this date' }, 400);
+    }
+
     const { 
       openingBalance, openingSim, 
       autoRefill1, autoRefill2, autoRefill3, 
@@ -658,7 +736,7 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
       const prevShort = Number(body.previousShort);
       const receivedCash = Number(body.saleAmount);
 
-      const config = JSON.parse(localStorage.getItem(STORAGE_KEYS.CONFIGURATIONS) || '{"commissionPercentage": 3.0, "simAmount": 150.0}');
+      const config = getConfigurations();
       const commissionPct = config.commissionPercentage || 3.0;
       const commFactor = 1 + (commissionPct / 100);
 
@@ -834,7 +912,7 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
     if (customFields !== undefined) current.customFields = customFields;
 
     // Recalculate
-    const config = JSON.parse(localStorage.getItem(STORAGE_KEYS.CONFIGURATIONS) || '{"commissionPercentage": 3.0, "simAmount": 150.0}');
+    const config = getConfigurations();
     const commissionPct = config.commissionPercentage || 3.0;
     const commFactor = 1 + (commissionPct / 100);
 
@@ -944,8 +1022,7 @@ export async function handleMockApiRequest(url: string, options?: RequestInit): 
     if (!user) return mockResponse({ success: false, error: 'Authentication required' }, 401);
 
     if (method === 'GET') {
-      const configStr = localStorage.getItem(STORAGE_KEYS.CONFIGURATIONS);
-      const configurations = configStr ? JSON.parse(configStr) : { commissionPercentage: 3.0, simAmount: 150.0 };
+      const configurations = getConfigurations();
       return mockResponse({ success: true, configurations });
     }
 

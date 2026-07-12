@@ -6,3 +6,254 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+/* --- THEME CUSTOM VARIABLES --- */
+
+/* Modern Light Theme (Default Layout style) */
+.theme-modern-light {
+  --bg-app: #f8fafc;
+  --bg-card: #ffffff;
+  --bg-hover: #f1f5f9;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --border-color: #e2e8f0;
+  --accent-color: #EE1D23;
+  --accent-hover: #cc1217;
+  --accent-bg-soft: #fef2f2;
+  --radius-card: 1.5rem;
+  --radius-inner: 0.75rem;
+  --font-family: "Plus Jakarta Sans", sans-serif;
+}
+
+/* Modern Dark Theme */
+.theme-modern-dark {
+  --bg-app: #0b0f19;
+  --bg-card: #151f32;
+  --bg-hover: #1e2d4a;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #4b5563;
+  --border-color: #1e293b;
+  --accent-color: #ff3e3e;
+  --accent-hover: #e02d2d;
+  --accent-bg-soft: rgba(239, 68, 68, 0.12);
+  --radius-card: 1.5rem;
+  --radius-inner: 0.75rem;
+  --font-family: "Plus Jakarta Sans", sans-serif;
+}
+
+/* Classic Light Theme (Accounting spreadsheet design: high density, compact, sharp borders) */
+.theme-classic-light {
+  --bg-app: #e2e8f0;
+  --bg-card: #ffffff;
+  --bg-hover: #eff6ff;
+  --text-primary: #1e293b;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --border-color: #64748b; /* Sharper accounting grid outline */
+  --accent-color: #0f172a; /* classic dark blue/slate accents */
+  --accent-hover: #1e293b;
+  --accent-bg-soft: #f1f5f9;
+  --radius-card: 0px; /* Sharp corners for ledger look */
+  --radius-inner: 0px;
+  --font-family: "Georgia", serif; /* Classic accounting report serif vibe */
+}
+
+/* Classic Dark Theme (Terminal retro ledger style: green mono, high-density, sharp corners) */
+.theme-classic-dark {
+  --bg-app: #030712;
+  --bg-card: #111827;
+  --bg-hover: #1f2937;
+  --text-primary: #10b981; /* Retro ledger emerald text */
+  --text-secondary: #34d399; /* Mint secondary text */
+  --text-muted: #064e3b;
+  --border-color: #10b981; /* High contrast green grid borders */
+  --accent-color: #10b981;
+  --accent-hover: #059669;
+  --accent-bg-soft: rgba(16, 185, 129, 0.15);
+  --radius-card: 0px;
+  --radius-inner: 0px;
+  --font-family: "JetBrains Mono", monospace; /* Rigid technical mono vibe */
+}
+
+/* --- THEMATIC AUTOMATIC OVERRIDES --- */
+
+/* Core mappings for custom classes */
+.theme-modern-dark,
+.theme-classic-light,
+.theme-classic-dark {
+  background-color: var(--bg-app) !important;
+  color: var(--text-primary) !important;
+  font-family: var(--font-family), sans-serif !important;
+
+  /* Global background overrides */
+  .bg-slate-50,
+  .bg-slate-50\/20,
+  .bg-slate-100 {
+    background-color: var(--bg-app) !important;
+  }
+
+  .bg-white,
+  .bg-slate-50\/40,
+  .bg-slate-50\/50,
+  .bg-indigo-50,
+  .bg-rose-50,
+  .bg-emerald-50,
+  .bg-amber-50 {
+    background-color: var(--bg-card) !important;
+  }
+
+  /* Sidebars or drawer elements */
+  aside, 
+  .relative.w-64.bg-white,
+  .bg-slate-50\/50 {
+    background-color: var(--bg-card) !important;
+  }
+
+  /* Specific sub-element overrides */
+  div, section, main, header, nav {
+    &.bg-white, &.bg-slate-50, &.bg-slate-50\/20 {
+      background-color: var(--bg-card) !important;
+    }
+  }
+
+  /* Main text colors map */
+  .text-slate-900,
+  .text-slate-800,
+  .text-slate-700,
+  .text-slate-600,
+  .text-indigo-900,
+  .text-emerald-900,
+  .text-rose-900,
+  .text-slate-950,
+  .text-black {
+    color: var(--text-primary) !important;
+  }
+
+  .text-slate-500,
+  .text-slate-400,
+  .text-indigo-700,
+  .text-rose-700,
+  .text-emerald-700,
+  .text-amber-700 {
+    color: var(--text-secondary) !important;
+  }
+
+  /* Border line colors map */
+  .border-slate-100,
+  .border-slate-150,
+  .border-slate-200,
+  .border-slate-300,
+  .border,
+  .border-b,
+  .border-t,
+  .border-r,
+  .border-l {
+    border-color: var(--border-color) !important;
+  }
+
+  /* Custom Red Airtel theme items redirect */
+  .bg-\[\#EE1D23\] {
+    background-color: var(--accent-color) !important;
+  }
+  .bg-\[\#EE1D23\]:hover {
+    background-color: var(--accent-hover) !important;
+  }
+  .text-\[\#EE1D23\] {
+    color: var(--accent-color) !important;
+  }
+  
+  /* Selected links, pill overlays or alerts */
+  .hover\:bg-red-50\/40:hover,
+  .hover\:bg-rose-50:hover,
+  .hover\:bg-emerald-50:hover,
+  .hover\:bg-indigo-50:hover,
+  .bg-red-50\/40,
+  .bg-rose-50,
+  .bg-emerald-50,
+  .bg-indigo-50,
+  .bg-amber-50 {
+    background-color: var(--accent-bg-soft) !important;
+    color: var(--accent-color) !important;
+  }
+
+  /* Input overlays inside dark modes */
+  input, select, textarea {
+    background-color: var(--bg-app) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--border-color) !important;
+  }
+}
+
+/* Classic Mode Grid Layout Specific Tweaks */
+.theme-classic-light,
+.theme-classic-dark {
+  /* Enforce rigid sans-serif block headers */
+  font-family: var(--font-family) !important;
+  
+  /* Sharp corners on all container cards */
+  .rounded-3xl,
+  .rounded-2xl,
+  .rounded-xl,
+  .rounded-lg,
+  .rounded-md,
+  .rounded-sm,
+  .rounded {
+    border-radius: var(--radius-card) !important;
+  }
+
+  /* Format standard tables to grid cells */
+  table {
+    border-collapse: collapse !important;
+    border: 1px solid var(--border-color) !important;
+  }
+  
+  th {
+    background-color: var(--bg-app) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--border-color) !important;
+    font-size: 10px !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.05em !important;
+    text-transform: uppercase !important;
+    padding: 6px 10px !important;
+  }
+  
+  td {
+    border: 1px solid var(--border-color) !important;
+    padding: 6px 10px !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+  }
+
+  /* High density buttons & form compact configurations */
+  input, select, textarea {
+    border-radius: var(--radius-inner) !important;
+    border: 1.5px solid var(--border-color) !important;
+    padding: 4px 8px !important;
+    font-size: 11px !important;
+  }
+
+  button {
+    border-radius: var(--radius-inner) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.025em !important;
+    font-weight: 800 !important;
+  }
+}
+
+/* Custom fade transition animations */
+.animate-fade-in {
+  animation: fadeIn 0.25s ease-out forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

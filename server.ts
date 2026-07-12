@@ -77,6 +77,7 @@ interface Sale {
   ecManual2: number;
   closingBalance: number;
   previousShort: number;
+  todayShort: number;
   saleTotal: number; // computed
   saleAmount: number;
   shortAmount: number;
@@ -828,9 +829,10 @@ app.post('/api/allocation', authenticateToken, requireRole(['Manager', 'Admin'])
     return res.status(400).json({ success: false, error: 'Valid FSC user ID is required' });
   }
   
-  const dup = db.allocations.find(a => a.date === date && a.fscId === fscId);
-  if (dup) {
-    return res.status(400).json({ success: false, error: 'An allocation already exists for this FSC on this date' });
+  // Check if sales sheet already exists for this FSC on this date
+  const existingSale = db.sales.find(s => s.date === date && s.fscId === fscId);
+  if (existingSale) {
+    return res.status(400).json({ success: false, error: 'Cannot add allocation because a sales sheet has already been created for this FSC on this date' });
   }
   
   const auto1 = Number(autoRefill1 || 0);
@@ -881,6 +883,12 @@ app.put('/api/allocation/:id', authenticateToken, requireRole(['Manager', 'Admin
   }
   
   const current = db.allocations[idx];
+  
+  const existingSale = db.sales.find(s => s.date === current.date && s.fscId === current.fscId);
+  if (existingSale) {
+    return res.status(400).json({ success: false, error: 'Cannot update allocation because a sales sheet has already been created for this FSC on this date' });
+  }
+
   const { 
     openingBalance, openingSim, 
     autoRefill1, autoRefill2, autoRefill3, 
@@ -918,6 +926,11 @@ app.delete('/api/allocation/:id', authenticateToken, requireRole(['Manager', 'Ad
   const allocation = db.allocations.find(a => a.id === req.params.id);
   if (!allocation) {
     return res.status(404).json({ success: false, error: 'Allocation not found' });
+  }
+
+  const existingSale = db.sales.find(s => s.date === allocation.date && s.fscId === allocation.fscId);
+  if (existingSale) {
+    return res.status(400).json({ success: false, error: 'Cannot delete allocation because a sales sheet has already been created for this FSC on this date' });
   }
   
   const fscUser = db.users.find(u => u.id === allocation.fscId);
@@ -1097,7 +1110,7 @@ app.post('/api/sale', authenticateToken, (req: any, res) => {
     date, fscId, allocationId, openingBalance, 
     autoRefill1, autoRefill2, autoRefill3, 
     ecManual1, ecManual2, closingBalance, 
-    previousShort, saleAmount, openingSim, sim, closingSim, remarks, customFields
+    previousShort, todayShort, saleAmount, openingSim, sim, closingSim, remarks, customFields
   } = req.body;
   
   if (!date) {
@@ -1150,9 +1163,9 @@ app.post('/api/sale', authenticateToken, (req: any, res) => {
   const rawSaleTotal = openBal + netAuto1 + netAuto2 + netAuto3 + netEc1 + netEc2 - closeBal;
   const saleTotal = Math.round(rawSaleTotal * 100) / 100;
   const netRemitted = Number(saleAmount || 0);
-  // Shortage is the difference between sale total and net remitted, plus previous short
-  const rawShortAmount = Math.max(0, saleTotal - netRemitted) + prevShort;
-  const shortAmount = Math.round(rawShortAmount * 100) / 100;
+  // Shortage is user-specified todayShort, or computed as difference between sale total and net remitted
+  const tdShort = todayShort !== undefined ? Number(todayShort) : Math.round((saleTotal - netRemitted) * 100) / 100;
+  const shortAmount = Math.round((prevShort + tdShort) * 100) / 100;
   
   const newSale: Sale = {
     id: `sale-${crypto.randomBytes(8).toString('hex')}`,
@@ -1167,6 +1180,7 @@ app.post('/api/sale', authenticateToken, (req: any, res) => {
     ecManual2: ec2,
     closingBalance: closeBal,
     previousShort: prevShort,
+    todayShort: tdShort,
     saleTotal,
     saleAmount: netRemitted,
     shortAmount,
@@ -1215,7 +1229,7 @@ app.put('/api/sale/:id', authenticateToken, (req: any, res) => {
   const { 
     openingBalance, autoRefill1, autoRefill2, autoRefill3, 
     ecManual1, ecManual2, closingBalance, 
-    previousShort, saleAmount, openingSim, sim, closingSim, remarks, customFields 
+    previousShort, todayShort, saleAmount, openingSim, sim, closingSim, remarks, customFields 
   } = req.body;
   
   if (openingBalance !== undefined) current.openingBalance = Number(openingBalance);
@@ -1226,6 +1240,7 @@ app.put('/api/sale/:id', authenticateToken, (req: any, res) => {
   if (ecManual2 !== undefined) current.ecManual2 = Number(ecManual2);
   if (closingBalance !== undefined) current.closingBalance = Number(closingBalance);
   if (previousShort !== undefined) current.previousShort = Number(previousShort);
+  if (todayShort !== undefined) current.todayShort = Number(todayShort);
   if (saleAmount !== undefined) current.saleAmount = Number(saleAmount);
   if (openingSim !== undefined) current.openingSim = Number(openingSim);
   if (sim !== undefined) current.sim = Number(sim);
@@ -1246,7 +1261,12 @@ app.put('/api/sale/:id', authenticateToken, (req: any, res) => {
   // Recompute math formulas
   const rawSaleTotal = current.openingBalance + netAuto1 + netAuto2 + netAuto3 + netEc1 + netEc2 - current.closingBalance;
   current.saleTotal = Math.round(rawSaleTotal * 100) / 100;
-  const rawShortAmount = Math.max(0, current.saleTotal - current.saleAmount) + current.previousShort;
+  if (todayShort !== undefined) {
+    current.todayShort = Number(todayShort);
+  } else if (current.todayShort === undefined) {
+    current.todayShort = Math.round((current.saleTotal - current.saleAmount) * 100) / 100;
+  }
+  const rawShortAmount = current.previousShort + current.todayShort;
   current.shortAmount = Math.round(rawShortAmount * 100) / 100;
   
   db.sales[idx] = current;

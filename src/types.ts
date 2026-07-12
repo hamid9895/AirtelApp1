@@ -63,6 +63,7 @@ export interface Sale {
   ecManual2: number;
   closingBalance: number;
   previousShort: number;
+  todayShort: number;
   saleTotal: number;
   saleAmount: number;
   shortAmount: number;

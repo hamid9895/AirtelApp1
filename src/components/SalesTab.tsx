@@ -24,6 +24,8 @@ interface SalesTabProps {
   setSaleAmount: (v: number) => void;
   salePreviousShort: number;
   setSalePreviousShort: (v: number) => void;
+  saleTodayShort: number;
+  setSaleTodayShort: (v: number) => void;
   saleOpeningSim: number;
   setSaleOpeningSim: (v: number) => void;
   saleSim: number;
@@ -50,6 +52,16 @@ interface SalesTabProps {
   customFieldConfigs: CustomFieldConfig[];
   globalConfig?: { commissionPercentage: number; simAmount: number } | null;
   allocations: Allocation[];
+  saleAutoRefill1: number;
+  setSaleAutoRefill1: (v: number) => void;
+  saleAutoRefill2: number;
+  setSaleAutoRefill2: (v: number) => void;
+  saleAutoRefill3: number;
+  setSaleAutoRefill3: (v: number) => void;
+  saleEcManual1: number;
+  setSaleEcManual1: (v: number) => void;
+  saleEcManual2: number;
+  setSaleEcManual2: (v: number) => void;
 }
 
 export const SalesTab: React.FC<SalesTabProps> = ({
@@ -73,6 +85,8 @@ export const SalesTab: React.FC<SalesTabProps> = ({
   setSaleAmount,
   salePreviousShort,
   setSalePreviousShort,
+  saleTodayShort,
+  setSaleTodayShort,
   saleOpeningSim,
   setSaleOpeningSim,
   saleSim,
@@ -95,7 +109,17 @@ export const SalesTab: React.FC<SalesTabProps> = ({
   onCancelEdit,
   customFieldConfigs,
   globalConfig,
-  allocations
+  allocations,
+  saleAutoRefill1,
+  setSaleAutoRefill1,
+  saleAutoRefill2,
+  setSaleAutoRefill2,
+  saleAutoRefill3,
+  setSaleAutoRefill3,
+  saleEcManual1,
+  setSaleEcManual1,
+  saleEcManual2,
+  setSaleEcManual2
 }) => {
   // --- LOCAL NAVIGATION STATE ---
   // List-first separated screen
@@ -118,6 +142,25 @@ export const SalesTab: React.FC<SalesTabProps> = ({
       }
     }
   }, [editingSaleId, sales]);
+
+  const autoRefill1 = saleAutoRefill1 || 0;
+  const autoRefill2 = saleAutoRefill2 || 0;
+  const autoRefill3 = saleAutoRefill3 || 0;
+  const totalRefills = autoRefill1 + autoRefill2 + autoRefill3;
+
+  const ecManual1 = saleEcManual1 || 0;
+  const ecManual2 = saleEcManual2 || 0;
+  const totalEc = ecManual1 + ecManual2;
+
+  const distributedSims = saleOpeningSim || 0;
+
+  const calculatedSaleAmount = saleOpeningBalance + totalRefills + totalEc - saleClosingBalance;
+  const closingShort = salePreviousShort + saleTodayShort;
+  const closingSimsCount = saleOpeningSim - saleSim;
+  
+  const simRate = globalConfig?.simAmount || 20;
+  const calculatedSimAmount = saleSim * simRate;
+  const totalSaleAmount = calculatedSaleAmount + calculatedSimAmount;
 
   // Dynamic carry-over of custom fields from allocation to sales form
   useEffect(() => {
@@ -399,6 +442,177 @@ export const SalesTab: React.FC<SalesTabProps> = ({
     finalColumns.push(...dynamicColumns);
   }
 
+  const renderFullSaleBreakdown = (sale: Sale) => {
+    const totalRefills = (sale.autoRefill1 || 0) + (sale.autoRefill2 || 0) + (sale.autoRefill3 || 0);
+    const totalEc = (sale.ecManual1 || 0) + (sale.ecManual2 || 0);
+    
+    const calculatedSaleAmount = (sale.openingBalance || 0) + totalRefills + totalEc - (sale.closingBalance || 0);
+    const closingSimsCount = (sale.openingSim || 0) - (sale.sim || 0);
+    
+    const simRate = globalConfig?.simAmount || 20;
+    const calculatedSimAmount = (sale.sim || 0) * simRate;
+    const totalSaleAmount = calculatedSaleAmount + calculatedSimAmount;
+    
+    const closingShort = (sale.previousShort || 0) + (sale.todayShort || 0);
+
+    return (
+      <div className="space-y-4 text-xs select-text">
+        {/* Section 1: FSC Allocation & Distribution */}
+        <div className="bg-slate-50/70 p-4 rounded-2xl border border-slate-200/60 space-y-3.5 text-left">
+          <div className="flex items-center gap-1.5 border-b border-slate-200/80 pb-1.5">
+            <Info className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+            <p className="text-[9.5px] font-black text-slate-500 uppercase tracking-widest">
+              1. FSC Allocation & Distribution (Vault Data)
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-white p-2.5 rounded-xl border border-slate-150 shadow-xs">
+              <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block">Opening Balance</span>
+              <span className="text-xs font-black text-slate-800 mt-0.5 block">₹{(sale.openingBalance || 0).toLocaleString('en-IN')}</span>
+            </div>
+            <div className="bg-white p-2.5 rounded-xl border border-slate-150 shadow-xs">
+              <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block">Distributed SIMs</span>
+              <span className="text-xs font-black text-slate-800 mt-0.5 block">{(sale.openingSim || 0)} Units</span>
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <span className="text-[8px] font-black text-indigo-500 uppercase tracking-wider block">Auto-Refill Credit Batches</span>
+            <div className="grid grid-cols-4 gap-2">
+              <div className="bg-white p-2 rounded-lg border border-slate-150 text-center">
+                <span className="text-[7.5px] font-bold text-slate-400 block">Batch 1</span>
+                <span className="text-[11px] font-extrabold text-slate-700 mt-0.5 block">₹{(sale.autoRefill1 || 0).toLocaleString('en-IN')}</span>
+              </div>
+              <div className="bg-white p-2 rounded-lg border border-slate-150 text-center">
+                <span className="text-[7.5px] font-bold text-slate-400 block">Batch 2</span>
+                <span className="text-[11px] font-extrabold text-slate-700 mt-0.5 block">₹{(sale.autoRefill2 || 0).toLocaleString('en-IN')}</span>
+              </div>
+              <div className="bg-white p-2 rounded-lg border border-slate-150 text-center">
+                <span className="text-[7.5px] font-bold text-slate-400 block">Batch 3</span>
+                <span className="text-[11px] font-extrabold text-slate-700 mt-0.5 block">₹{(sale.autoRefill3 || 0).toLocaleString('en-IN')}</span>
+              </div>
+              <div className="bg-indigo-50/50 p-2 rounded-lg border border-indigo-100 text-center">
+                <span className="text-[7.5px] font-black text-indigo-500 block">Total Refills</span>
+                <span className="text-[11px] font-black text-indigo-700 mt-0.5 block">₹{totalRefills.toLocaleString('en-IN')}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <span className="text-[8px] font-black text-emerald-600 uppercase tracking-wider block">EasyCharge Top-ups</span>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="bg-white p-2 rounded-lg border border-slate-150 text-center">
+                <span className="text-[7.5px] font-bold text-slate-400 block">EasyCharge 1</span>
+                <span className="text-[11px] font-extrabold text-slate-700 mt-0.5 block">₹{(sale.ecManual1 || 0).toLocaleString('en-IN')}</span>
+              </div>
+              <div className="bg-white p-2 rounded-lg border border-slate-150 text-center">
+                <span className="text-[7.5px] font-bold text-slate-400 block">EasyCharge 2</span>
+                <span className="text-[11px] font-extrabold text-slate-700 mt-0.5 block">₹{(sale.ecManual2 || 0).toLocaleString('en-IN')}</span>
+              </div>
+              <div className="bg-emerald-50/50 p-2 rounded-lg border border-emerald-100 text-center">
+                <span className="text-[7.5px] font-black text-emerald-600 block">Total EasyCharge</span>
+                <span className="text-[11px] font-black text-emerald-700 mt-0.5 block">₹{totalEc.toLocaleString('en-IN')}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Section 2: Daily Sales Entry */}
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3 text-left">
+          <div className="flex items-center gap-1.5 border-b border-slate-150 pb-1.5">
+            <DollarSign className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+            <p className="text-[9.5px] font-black text-slate-700 uppercase tracking-widest">
+              2. Daily Sales Entry Details
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-slate-50/50 p-2.5 rounded-xl border border-slate-100">
+              <span className="text-[8px] font-black text-slate-400 block uppercase">Closing Balance (Remaining)</span>
+              <span className="text-xs font-bold text-slate-700 mt-0.5 block">₹{(sale.closingBalance || 0).toLocaleString('en-IN')}</span>
+            </div>
+            <div className="bg-slate-50/50 p-2.5 rounded-xl border border-slate-100">
+              <span className="text-[8px] font-black text-slate-400 block uppercase">Calculated Airtime Sales</span>
+              <span className="text-xs font-black text-slate-800 mt-0.5 block">
+                ₹{calculatedSaleAmount.toLocaleString('en-IN')}
+                <span className="text-[9px] text-slate-400 font-normal block mt-0.5">Net of Comm: ₹{(sale.saleTotal || 0).toLocaleString('en-IN')}</span>
+              </span>
+            </div>
+
+            <div className="bg-slate-50/50 p-2.5 rounded-xl border border-slate-100">
+              <span className="text-[8px] font-black text-slate-400 block uppercase">SIMs Sold Count</span>
+              <span className="text-xs font-bold text-slate-700 mt-0.5 block">{(sale.sim || 0)} SIMs</span>
+            </div>
+            <div className="bg-slate-50/50 p-2.5 rounded-xl border border-slate-100">
+              <span className="text-[8px] font-black text-slate-400 block uppercase">Closing SIMs Count</span>
+              <span className="text-xs font-bold text-slate-700 mt-0.5 block">{closingSimsCount} Units</span>
+            </div>
+
+            <div className="bg-slate-50/50 p-2.5 rounded-xl border border-slate-100">
+              <span className="text-[8px] font-black text-slate-400 block uppercase">SIM Sales Amount</span>
+              <span className="text-xs font-bold text-slate-700 mt-0.5 block">₹{calculatedSimAmount.toLocaleString('en-IN')}</span>
+            </div>
+            <div className="bg-emerald-50/40 p-2.5 rounded-xl border border-emerald-100">
+              <span className="text-[8px] font-black text-emerald-700 block uppercase tracking-wider">Total Sales (Airtime + SIM)</span>
+              <span className="text-xs font-black text-emerald-700 mt-0.5 block">₹{totalSaleAmount.toLocaleString('en-IN')}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Section 3: Shortage Auditing & Ledger */}
+        <div className="bg-slate-50/70 p-4 rounded-2xl border border-slate-200/60 space-y-3 text-left">
+          <div className="flex items-center gap-1.5 border-b border-[#EE1D23]/10 pb-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+            <p className="text-[9.5px] font-black text-slate-500 uppercase tracking-widest">
+              3. Shortage Auditing & Ledger
+            </p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <div className="bg-white p-2.5 rounded-xl border border-slate-150 text-center">
+              <span className="text-[8px] font-black text-slate-400 block uppercase">Last Day Short</span>
+              <span className="text-xs font-bold text-slate-700 mt-0.5 block">₹{(sale.previousShort || 0).toLocaleString('en-IN')}</span>
+            </div>
+            <div className="bg-white p-2.5 rounded-xl border border-slate-150 text-center">
+              <span className="text-[8px] font-black text-slate-400 block uppercase">Today's Short / Extra</span>
+              <span className={`text-xs font-bold mt-0.5 block ${(sale.todayShort || 0) < 0 ? 'text-rose-600' : (sale.todayShort || 0) > 0 ? 'text-emerald-600' : 'text-slate-700'}`}>
+                ₹{(sale.todayShort || 0).toLocaleString('en-IN')}
+              </span>
+            </div>
+            <div className={`p-2.5 rounded-xl border text-center ${closingShort < 0 ? 'bg-rose-50 border-rose-100 text-rose-700' : closingShort > 0 ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-white border-slate-150 text-slate-700'}`}>
+              <span className="text-[8px] font-black block uppercase">Closing Short Balance</span>
+              <span className="text-xs font-black mt-0.5 block">₹{closingShort.toLocaleString('en-IN')}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Section 4: Dynamic Custom Fields */}
+        {activeFscConfigs.length > 0 && (
+          <div className="space-y-3 bg-slate-50/50 p-4 rounded-2xl border border-slate-150 text-left">
+            <div className="flex items-center gap-1.5 border-b border-slate-200 pb-1.5">
+              <Info className="w-3.5 h-3.5 text-[#EE1D23]" />
+              <p className="text-[9.5px] font-black text-slate-500 uppercase tracking-widest">
+                4. Custom Information Fields
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              {activeFscConfigs.map(c => {
+                const val = sale.customFields?.[c.id];
+                return (
+                  <div key={c.id} className="bg-white p-2 rounded-lg border border-slate-100">
+                    <span className="text-[8px] font-black text-slate-400 block uppercase">{c.name}</span>
+                    <p className="font-extrabold text-slate-700 mt-0.5">{val !== undefined && val !== null && val !== '' ? val : '-'}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       
@@ -552,98 +766,242 @@ export const SalesTab: React.FC<SalesTabProps> = ({
               </div>
             </div>
 
-            {/* Balances Section */}
-            <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100/75 space-y-4">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 pb-1.5">Credit Balances Audit</p>
-              
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[9px] font-extrabold uppercase text-slate-400">Opening Balance (₹) [Read-Only]</label>
-                  <input
-                    type="number"
-                    required
-                    disabled
-                    value={saleOpeningBalance}
-                    className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-extrabold text-slate-500 cursor-not-allowed opacity-75"
-                    title="Automatically retrieved from your approved manager allocation"
-                  />
+            {/* 1. FSC ALLOCATION & DISTRIBUTION (Read-Only Vault Data) */}
+            <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-150 space-y-5">
+              <div className="flex items-center gap-1.5 border-b border-slate-200 pb-2">
+                <Info className="w-4 h-4 text-indigo-500 shrink-0" />
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                  FSC Allocation & Distribution (Auto-Loaded)
+                </p>
+              </div>
+
+              {/* Sub-section A: Airtime & SIMs Overview */}
+              <div className="space-y-1.5">
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">General Balance & Cards</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Opening Balance */}
+                  <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+                    <span className="text-[9px] font-black text-slate-400 uppercase block tracking-wider">Opening Balance</span>
+                    <span className="text-sm font-black text-slate-800 mt-1 block">₹{saleOpeningBalance.toLocaleString('en-IN')}</span>
+                    <span className="text-[8.5px] text-slate-400 block mt-0.5 italic">Last day closing balance</span>
+                  </div>
+
+                  {/* Distributed SIM cards count */}
+                  <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+                    <span className="text-[9px] font-black text-slate-400 uppercase block tracking-wider">Distributed SIMs</span>
+                    <span className="text-sm font-black text-slate-800 mt-1 block">{distributedSims} Units</span>
+                    <span className="text-[8.5px] text-slate-400 block mt-0.5 italic">Allocated for today</span>
+                  </div>
                 </div>
+              </div>
+
+              {/* Sub-section B: Auto-Refill Credit Batches */}
+              <div className="space-y-1.5">
+                <p className="text-[9px] font-black text-indigo-500 uppercase tracking-wider">Auto-Refill Credit Batches</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {/* Batch 1 */}
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs">
+                    <span className="text-[8px] font-bold text-slate-400 uppercase block tracking-wider">Batch 1</span>
+                    <span className="text-xs font-extrabold text-slate-700 mt-1 block">₹{autoRefill1.toLocaleString('en-IN')}</span>
+                  </div>
+                  {/* Batch 2 */}
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs">
+                    <span className="text-[8px] font-bold text-slate-400 uppercase block tracking-wider">Batch 2</span>
+                    <span className="text-xs font-extrabold text-slate-700 mt-1 block">₹{autoRefill2.toLocaleString('en-IN')}</span>
+                  </div>
+                  {/* Batch 3 */}
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs">
+                    <span className="text-[8px] font-bold text-slate-400 uppercase block tracking-wider">Batch 3</span>
+                    <span className="text-xs font-extrabold text-slate-700 mt-1 block">₹{autoRefill3.toLocaleString('en-IN')}</span>
+                  </div>
+                  {/* Total Refills */}
+                  <div className="bg-indigo-50/50 p-3 rounded-xl border border-indigo-100 shadow-xs">
+                    <span className="text-[8px] font-black text-indigo-500 uppercase block tracking-wider">Total Auto-Refills</span>
+                    <span className="text-xs font-black text-indigo-700 mt-1 block">₹{totalRefills.toLocaleString('en-IN')}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sub-section C: EasyCharge Manual Top-ups */}
+              <div className="space-y-1.5">
+                <p className="text-[9px] font-black text-emerald-600 uppercase tracking-wider">EasyCharge Top-ups</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* EC 1 */}
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs">
+                    <span className="text-[8px] font-bold text-slate-400 uppercase block tracking-wider">EasyCharge 1</span>
+                    <span className="text-xs font-extrabold text-slate-700 mt-1 block">₹{ecManual1.toLocaleString('en-IN')}</span>
+                  </div>
+                  {/* EC 2 */}
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs">
+                    <span className="text-[8px] font-bold text-slate-400 uppercase block tracking-wider">EasyCharge 2</span>
+                    <span className="text-xs font-extrabold text-slate-700 mt-1 block">₹{ecManual2.toLocaleString('en-IN')}</span>
+                  </div>
+                  {/* Total EasyCharge */}
+                  <div className="bg-emerald-50/50 p-3 rounded-xl border border-emerald-100 shadow-xs">
+                    <span className="text-[8px] font-black text-emerald-600 uppercase block tracking-wider">Total EasyCharge</span>
+                    <span className="text-xs font-black text-emerald-700 mt-1 block">₹{totalEc.toLocaleString('en-IN')}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. DAILY SALES DATA ENTRY */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+              <div className="flex items-center gap-1.5 border-b border-slate-150 pb-2">
+                <DollarSign className="w-4 h-4 text-emerald-500 shrink-0" />
+                <p className="text-[10px] font-black text-slate-700 uppercase tracking-widest">
+                  Daily Sales Entry
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Sales Closing Balance Input */}
                 <div className="space-y-1">
-                  <label className="text-[9px] font-extrabold uppercase text-slate-400">Closing Balance (₹)</label>
+                  <label className="text-[10px] font-black uppercase text-slate-500 flex items-center gap-1">
+                    Sales Closing Balance (₹)
+                  </label>
                   <input
                     type="number"
-                    required
+                    placeholder="Enter remaining balance..."
                     value={saleClosingBalance === 0 ? '' : saleClosingBalance}
                     onChange={(e) => setSaleClosingBalance(e.target.value === '' ? 0 : Number(e.target.value))}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold focus:outline-none focus:border-[#EE1D23]"
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#EE1D23]/10 focus:border-[#EE1D23] transition-all"
                   />
+                  <p className="text-[9px] text-slate-400 leading-normal">
+                    FSC will type the remaining credit balance they have at end of day.
+                  </p>
                 </div>
-              </div>
-            </div>
 
-            {/* Remittance Section */}
-            <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100/75 space-y-4">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 pb-1.5">Remittance & Liabilities</p>
-              
-              <div className="grid grid-cols-2 gap-3">
+                {/* Sale Amount Read-Only Display */}
                 <div className="space-y-1">
-                  <label className="text-[9px] font-black uppercase text-[#EE1D23]">Net Cash Remitted (₹)</label>
-                  <input
-                    type="number"
-                    required
-                    value={saleAmount === 0 ? '' : saleAmount}
-                    onChange={(e) => setSaleAmount(e.target.value === '' ? 0 : Number(e.target.value))}
-                    className="w-full bg-white border border-[#EE1D23]/30 focus:border-[#EE1D23] rounded-xl px-3 py-2 text-xs font-black text-[#EE1D23]"
-                  />
+                  <label className="text-[10px] font-black uppercase text-slate-400">
+                    Calculated Sale Amount (₹)
+                  </label>
+                  <div className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-black text-slate-700 select-all cursor-not-allowed h-9 flex items-center">
+                    ₹{calculatedSaleAmount.toLocaleString('en-IN')}
+                  </div>
+                  <p className="text-[9px] text-slate-400 leading-normal">
+                    Formula: (Opening Balance + Auto-Refill Credit + EasyCharge) - Closing Balance
+                  </p>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[9px] font-extrabold uppercase text-slate-400">Previous Shortages (₹)</label>
-                  <input
-                    type="number"
-                    required
-                    value={salePreviousShort === 0 ? '' : salePreviousShort}
-                    onChange={(e) => setSalePreviousShort(e.target.value === '' ? 0 : Number(e.target.value))}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none"
-                  />
-                </div>
-              </div>
-            </div>
 
-            {/* SIM Cards auditing */}
-            <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100/75 space-y-3">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 pb-1.5">SIM Cards Auditing</p>
-              
-              <div className="grid grid-cols-3 gap-3">
+                {/* Saled Sim Count Input */}
                 <div className="space-y-1">
-                  <label className="text-[8px] font-extrabold uppercase text-slate-400">Opening SIMs [Read-Only]</label>
+                  <label className="text-[10px] font-black uppercase text-slate-500 flex items-center gap-1">
+                    Saled SIM Count
+                  </label>
                   <input
                     type="number"
-                    required
-                    disabled
-                    value={saleOpeningSim}
-                    className="w-full bg-slate-100 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-extrabold text-slate-500 cursor-not-allowed opacity-75"
-                    title="Automatically retrieved from your approved manager allocation"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[8px] font-extrabold uppercase text-slate-400">SIMs Sold</label>
-                  <input
-                    type="number"
-                    required
+                    placeholder="Enter sold SIM cards count..."
                     value={saleSim === 0 ? '' : saleSim}
                     onChange={(e) => setSaleSim(e.target.value === '' ? 0 : Number(e.target.value))}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold"
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#EE1D23]/10 focus:border-[#EE1D23] transition-all"
                   />
+                  <p className="text-[9px] text-slate-400 leading-normal">
+                    Enter the count of SIM cards sold by the FSC today.
+                  </p>
                 </div>
+
+                {/* Closing Sim Count Read-Only Display */}
                 <div className="space-y-1">
-                  <label className="text-[8px] font-extrabold uppercase text-slate-400">Closing SIMs</label>
+                  <label className="text-[10px] font-black uppercase text-slate-400">
+                    Closing SIM Count [Read-Only]
+                  </label>
+                  <div className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-600 h-9 flex items-center">
+                    {closingSimsCount} Units
+                  </div>
+                  <p className="text-[9px] text-slate-400 leading-normal">
+                    Formula: Distributed SIM Count - Saled SIM Count
+                  </p>
+                </div>
+
+                {/* Sim Amount Read-Only Display */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-slate-400">
+                    SIM Amount (₹) [Read-Only]
+                  </label>
+                  <div className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-600 h-9 flex items-center">
+                    ₹{calculatedSimAmount.toLocaleString('en-IN')}
+                  </div>
+                  <p className="text-[9px] text-slate-400 leading-normal">
+                    Rate: ₹{simRate}/SIM (Formula: Saled SIM Count × Rate)
+                  </p>
+                </div>
+
+                {/* Total Sale Amount Read-Only display */}
+                <div className="space-y-1 bg-emerald-50/40 p-3 rounded-xl border border-emerald-100/50">
+                  <label className="text-[10px] font-black uppercase text-emerald-700 block tracking-wider">
+                    Total Sale Amount (₹) [Auto-Calc]
+                  </label>
+                  <span className="text-lg font-black text-emerald-700 block mt-0.5">
+                    ₹{totalSaleAmount.toLocaleString('en-IN')}
+                  </span>
+                  <p className="text-[8.5px] text-emerald-600/90 leading-tight mt-1">
+                    Formula: Sale Amount + SIM Amount
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. SHORTAGE AUDITING & LEDGER */}
+            <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-150 space-y-4">
+              <div className="flex items-center gap-1.5 border-b border-slate-200 pb-2">
+                <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                  Shortage Auditing & Ledger
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Last Day Short Amount */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-slate-400 block">
+                    Last Day Short Amount (₹)
+                  </label>
+                  <div className={`w-full border rounded-xl px-3 py-2 text-xs font-bold h-9 flex items-center ${
+                    salePreviousShort < 0 ? 'bg-rose-50 border-rose-100 text-rose-700' :
+                    salePreviousShort > 0 ? 'bg-emerald-50 border-emerald-100 text-emerald-700' :
+                    'bg-slate-50 border-slate-200 text-slate-600'
+                  }`}>
+                    ₹{salePreviousShort.toLocaleString('en-IN')}
+                  </div>
+                  <p className="text-[9px] text-slate-400 leading-normal">
+                    Automatically loaded shortage from last sheet (can be + or -).
+                  </p>
+                </div>
+
+                {/* Today Short Input */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-slate-500 block">
+                    Today Short (₹)
+                  </label>
                   <input
                     type="number"
-                    required
-                    value={saleClosingSim === 0 ? '' : saleClosingSim}
-                    onChange={(e) => setSaleClosingSim(e.target.value === '' ? 0 : Number(e.target.value))}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold"
+                    placeholder="Enter today's short (can be - or +)..."
+                    value={saleTodayShort === 0 ? '' : saleTodayShort}
+                    onChange={(e) => setSaleTodayShort(e.target.value === '' ? 0 : Number(e.target.value))}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#EE1D23]/10 focus:border-[#EE1D23] transition-all"
                   />
+                  <p className="text-[9px] text-slate-400 leading-normal">
+                    Type shortages as negative numbers (e.g., -1200) or extra collections as positive.
+                  </p>
+                </div>
+
+                {/* Closing Short Read-Only Display */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-slate-400 block">
+                    Closing Short (₹) [Auto-Calc]
+                  </label>
+                  <div className={`w-full border rounded-xl px-3 py-2 text-xs font-black h-9 flex items-center ${
+                    closingShort < 0 ? 'bg-rose-50 border-rose-200 text-rose-700' :
+                    closingShort > 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
+                    'bg-slate-50 border-slate-200 text-slate-600'
+                  }`}>
+                    ₹{closingShort.toLocaleString('en-IN')}
+                  </div>
+                  <p className="text-[9px] text-slate-400 leading-normal">
+                    Formula: Last Day Short + Today Short (Will become tomorrow's Last Day Short).
+                  </p>
                 </div>
               </div>
             </div>
@@ -712,7 +1070,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({
       {/* 3. INTERACTIVE APPROVALS MODAL REVIEW */}
       {selectedSaleToReview && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in select-none">
-          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-lg p-6 space-y-5 animate-slide-up shadow-2xl">
+          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-2xl p-6 space-y-4 animate-slide-up shadow-2xl flex flex-col max-h-[90vh]">
             
             <div className="flex justify-between items-start border-b border-slate-100 pb-3">
               <div>
@@ -732,68 +1090,46 @@ export const SalesTab: React.FC<SalesTabProps> = ({
               </button>
             </div>
 
-            {/* Metrics parameters panel */}
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="bg-slate-50 p-3 rounded-2xl">
-                <span className="text-slate-400 font-bold uppercase text-[9px]">FSC Coordinator</span>
-                <p className="font-extrabold text-slate-800 mt-0.5">
-                  {allUsers.find(u => u.id === selectedSaleToReview.fscId)?.name || 'FSC Agent'}
-                </p>
-              </div>
-              <div className="bg-slate-50 p-3 rounded-2xl">
-                <span className="text-slate-400 font-bold uppercase text-[9px]">Sales Sheet Date</span>
-                <p className="font-extrabold text-slate-800 mt-0.5">{selectedSaleToReview.date}</p>
-              </div>
-              <div className="bg-slate-50 p-3 rounded-2xl">
-                <span className="text-slate-400 font-bold uppercase text-[9px]">Computed Airtime Sales</span>
-                <p className="font-black text-[#EE1D23] mt-0.5">₹{selectedSaleToReview.saleTotal.toLocaleString('en-IN')}</p>
-              </div>
-              <div className="bg-slate-50 p-3 rounded-2xl">
-                <span className="text-slate-400 font-bold uppercase text-[9px]">Net Cash Settle / Remitted</span>
-                <p className="font-extrabold text-emerald-600 mt-0.5">₹{selectedSaleToReview.saleAmount.toLocaleString('en-IN')}</p>
-              </div>
-            </div>
-
-            {/* Custom fields display in review modal */}
-            {activeFscConfigs.length > 0 && (
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100/75 space-y-2">
-                <span className="text-slate-400 font-bold uppercase text-[9px] tracking-wider block border-b border-slate-200 pb-1">
-                  Custom Information Fields
-                </span>
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  {activeFscConfigs.map(c => {
-                    const val = selectedSaleToReview.customFields?.[c.id];
-                    return (
-                      <div key={c.id}>
-                        <span className="text-slate-400 font-extrabold uppercase text-[9px]">{c.name}</span>
-                        <p className="font-extrabold text-slate-800 mt-0.5">{val !== undefined && val !== null && val !== '' ? val : '-'}</p>
-                      </div>
-                    );
-                  })}
+            {/* Modal Body: Scrollable */}
+            <div className="overflow-y-auto pr-1 space-y-4 flex-1">
+              {/* FSC & Date Header block */}
+              <div className="grid grid-cols-2 gap-3 text-xs text-left">
+                <div className="bg-slate-50 p-3 rounded-2xl">
+                  <span className="text-slate-400 font-bold uppercase text-[9px]">FSC Coordinator</span>
+                  <p className="font-extrabold text-slate-800 mt-0.5">
+                    {allUsers.find(u => u.id === selectedSaleToReview.fscId)?.name || 'FSC Agent'}
+                  </p>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-2xl">
+                  <span className="text-slate-400 font-bold uppercase text-[9px]">Sales Sheet Date</span>
+                  <p className="font-extrabold text-slate-800 mt-0.5">{selectedSaleToReview.date}</p>
                 </div>
               </div>
-            )}
 
-            <div className="bg-amber-50/50 border border-amber-100 p-4 rounded-2xl space-y-1">
-              <span className="text-amber-800 font-bold uppercase text-[9px]">Coordinator Notes</span>
-              <p className="text-xs text-slate-750 italic leading-relaxed">
-                "{selectedSaleToReview.remarks || 'No notes specified by agent.'}"
-              </p>
-            </div>
+              {/* Comprehensive Breakdown */}
+              {renderFullSaleBreakdown(selectedSaleToReview)}
 
-            {/* Comments input */}
-            <div className="space-y-1">
-              <label className="text-[10px] font-extrabold uppercase text-slate-400">Reviewer Note / Settle Remarks</label>
-              <textarea
-                value={reviewNoteText}
-                onChange={(e) => setReviewNoteText(e.target.value)}
-                placeholder="Add matching bank transaction references, recovery agreement remarks, or reasons for rejection..."
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-800 focus:outline-none focus:border-[#EE1D23] h-16 resize-none"
-              />
+              <div className="bg-amber-50/50 border border-amber-100 p-4 rounded-2xl space-y-1 text-left">
+                <span className="text-amber-800 font-bold uppercase text-[9px]">Coordinator Notes</span>
+                <p className="text-xs text-slate-750 italic leading-relaxed">
+                  "{selectedSaleToReview.remarks || 'No notes specified by agent.'}"
+                </p>
+              </div>
+
+              {/* Comments input */}
+              <div className="space-y-1 text-left">
+                <label className="text-[10px] font-extrabold uppercase text-slate-400">Reviewer Note / Settle Remarks</label>
+                <textarea
+                  value={reviewNoteText}
+                  onChange={(e) => setReviewNoteText(e.target.value)}
+                  placeholder="Add matching bank transaction references, recovery agreement remarks, or reasons for rejection..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-800 focus:outline-none focus:border-[#EE1D23] h-16 resize-none"
+                />
+              </div>
             </div>
 
             {/* Modal actions */}
-            <div className="grid grid-cols-2 gap-3 pt-2">
+            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
               <button
                 onClick={() => onReviewSaleSubmit('reject')}
                 className="bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 font-bold py-2.5 rounded-2xl text-xs cursor-pointer select-none transition-colors"
@@ -812,12 +1148,12 @@ export const SalesTab: React.FC<SalesTabProps> = ({
         </div>
       )}
 
-      {/* 3. DETAIL VIEW MODAL */}
+      {/* 4. DETAIL VIEW MODAL */}
       {selectedSale && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in" id="sales-detail-modal">
-          <div className="bg-white rounded-3xl max-w-xl w-full overflow-hidden shadow-2xl border border-slate-100 flex flex-col max-h-[90vh]">
+          <div className="bg-white rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl border border-slate-100 flex flex-col max-h-[90vh]">
             {/* Header */}
-            <div className={`p-6 flex justify-between items-start text-white ${
+            <div className={`p-6 flex justify-between items-start text-white text-left ${
               selectedSale.status === 'Approved' ? 'bg-gradient-to-r from-emerald-600 to-emerald-800' :
               selectedSale.status === 'Pending' ? 'bg-gradient-to-r from-amber-500 to-amber-700' :
               selectedSale.status === 'Rejected' ? 'bg-gradient-to-r from-rose-600 to-rose-800' :
@@ -837,9 +1173,9 @@ export const SalesTab: React.FC<SalesTabProps> = ({
             </div>
 
             {/* Content */}
-            <div className="p-6 space-y-6 overflow-y-auto">
+            <div className="p-6 space-y-6 overflow-y-auto flex-1 pr-4">
               
-              {/* Financial Summary Cards */}
+              {/* Financial Quick Cards */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 text-center">
                   <span className="text-[8px] font-extrabold uppercase text-slate-400 block">Credit Sales</span>
@@ -857,73 +1193,28 @@ export const SalesTab: React.FC<SalesTabProps> = ({
                 </div>
               </div>
 
-              {/* Grid Breakdown */}
-              <div className="border-t border-b border-slate-100 py-4 grid grid-cols-2 gap-x-6 gap-y-4 text-xs">
-                <div>
-                  <span className="text-[9px] font-extrabold text-slate-400 uppercase">Opening Balance</span>
-                  <p className="font-extrabold text-slate-800">₹{(selectedSale.openingBalance || 0).toLocaleString('en-IN')}</p>
-                </div>
-                <div>
-                  <span className="text-[9px] font-extrabold text-slate-400 uppercase">Closing Balance</span>
-                  <p className="font-extrabold text-slate-800">₹{(selectedSale.closingBalance || 0).toLocaleString('en-IN')}</p>
-                </div>
-                <div>
-                  <span className="text-[9px] font-extrabold text-slate-400 uppercase">Allocated Refills (R1+R2+R3)</span>
-                  <p className="font-semibold text-slate-700">₹{((selectedSale.autoRefill1 || 0) + (selectedSale.autoRefill2 || 0) + (selectedSale.autoRefill3 || 0)).toLocaleString('en-IN')}</p>
-                </div>
-                <div>
-                  <span className="text-[9px] font-extrabold text-slate-400 uppercase">Manual EasyCharge (1+2)</span>
-                  <p className="font-semibold text-slate-700">₹{((selectedSale.ecManual1 || 0) + (selectedSale.ecManual2 || 0)).toLocaleString('en-IN')}</p>
-                </div>
-                <div>
-                  <span className="text-[9px] font-extrabold text-slate-400 uppercase">Previous Unsettled Shortages</span>
-                  <p className="font-semibold text-slate-700">₹{(selectedSale.previousShort || 0).toLocaleString('en-IN')}</p>
-                </div>
-                <div>
-                  <span className="text-[9px] font-extrabold text-slate-400 uppercase">SIM Cards (Op / Sold / Cl)</span>
-                  <p className="font-semibold text-slate-700">Op: {selectedSale.openingSim || 0} | Sold: {selectedSale.sim || 0} | Cl: {selectedSale.closingSim || 0}</p>
-                </div>
-              </div>
-
-              {/* Custom fields display in details modal */}
-              {activeFscConfigs.length > 0 && (
-                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100/75 space-y-2">
-                  <span className="text-slate-400 font-black uppercase text-[9px] tracking-widest block border-b border-slate-200 pb-1">
-                    Custom Fields Information
-                  </span>
-                  <div className="grid grid-cols-2 gap-4 text-xs">
-                    {activeFscConfigs.map(c => {
-                      const val = selectedSale.customFields?.[c.id];
-                      return (
-                        <div key={c.id}>
-                          <span className="text-slate-400 font-extrabold uppercase text-[9px]">{c.name}</span>
-                          <p className="font-bold text-slate-800 mt-0.5">{val !== undefined && val !== null && val !== '' ? val : '-'}</p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+              {/* Full Detailed Breakdown */}
+              {renderFullSaleBreakdown(selectedSale)}
 
               {/* Remarks Box */}
-              <div className="space-y-3">
+              <div className="space-y-3 text-left">
                 {selectedSale.remarks && (
                   <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
                     <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Coordinator Remarks</span>
-                    <p className="text-xs text-slate-700 italic">"{selectedSale.remarks}"</p>
+                    <p className="text-xs text-slate-750 italic">"{selectedSale.remarks}"</p>
                   </div>
                 )}
                 
                 {selectedSale.reviewNote && (
                   <div className="bg-amber-50/50 border border-amber-100 p-3 rounded-2xl">
                     <span className="text-[9px] font-black text-amber-800 uppercase tracking-widest block mb-1">Reviewer Note / Settlement logs</span>
-                    <p className="text-xs text-slate-750 font-bold italic">"{selectedSale.reviewNote}"</p>
+                    <p className="text-xs text-slate-750 italic font-bold">"{selectedSale.reviewNote}"</p>
                   </div>
                 )}
               </div>
 
               {/* Workflow Logs */}
-              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100 text-[10px] text-slate-400 font-bold space-y-1.5 uppercase">
+              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100 text-[10px] text-slate-400 font-bold space-y-1.5 uppercase text-left">
                 <div>CREATED BY: <span className="text-slate-600 font-extrabold">{allUsers.find(u => u.id === selectedSale.createdBy)?.name || selectedSale.createdBy || 'SYSTEM'}</span> ({new Date(selectedSale.createdAt).toLocaleString()})</div>
                 {selectedSale.submittedBy && (
                   <div>SUBMITTED BY: <span className="text-slate-600 font-extrabold">{allUsers.find(u => u.id === selectedSale.submittedBy)?.name || selectedSale.submittedBy}</span> {selectedSale.submittedAt && `(${new Date(selectedSale.submittedAt).toLocaleString()})`}</div>

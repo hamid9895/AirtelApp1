@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { TrendingUp, Users, Plus, ChevronLeft, Calendar, AlertTriangle, Info } from 'lucide-react';
-import { Allocation, UserDto, DailyStock, CustomFieldConfig } from '../types';
+import { Allocation, UserDto, DailyStock, CustomFieldConfig, Sale } from '../types';
 import { DataGrid, GridColumn } from './DataGrid';
 
 interface AllocationsTabProps {
   allocations: Allocation[];
   fscUsersList: UserDto[];
   dailyStocks: DailyStock[];
+  sales: Sale[];
   onDeleteAllocation: (id: string) => void;
   onSubmitAllocation: (e: React.FormEvent, customFields?: Record<string, string | number>) => void;
   allocDate: string;
@@ -43,6 +44,7 @@ export const AllocationsTab: React.FC<AllocationsTabProps> = ({
   allocations,
   fscUsersList,
   dailyStocks,
+  sales,
   onDeleteAllocation,
   onSubmitAllocation,
   allocDate,
@@ -77,6 +79,7 @@ export const AllocationsTab: React.FC<AllocationsTabProps> = ({
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [localCustomFields, setLocalCustomFields] = useState<Record<string, string | number>>({});
   const [selectedAllocation, setSelectedAllocation] = useState<Allocation | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // --- SEPARATED CALCULATIONS & CONTROLLERS ---
 
@@ -143,6 +146,7 @@ export const AllocationsTab: React.FC<AllocationsTabProps> = ({
     setLocalCustomFields({});
     setViewMode('list');
     setShowConfirmModal(false);
+    setErrorMsg(null);
   };
 
   /**
@@ -150,6 +154,25 @@ export const AllocationsTab: React.FC<AllocationsTabProps> = ({
    */
   const handleFormSubmission = (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMsg(null);
+
+    // Rule: if a sales sheet already exists for this FSC on this date, we do not allow creating/modifying allocations.
+    const salesSheetCreated = sales.some(s => s.date === allocDate && s.fscId === allocFscId);
+    if (salesSheetCreated) {
+      setErrorMsg('Validation Error: A sales sheet has already been created for this FSC on this date. You cannot add or modify allocations.');
+      return;
+    }
+
+    // Rule: any of one field is mandatory (Batch 1, EC topup 1, or Distributed SIM Cards count)
+    const b1 = Number(allocAutoRefill1 || 0);
+    const ec1 = Number(allocEcManual1 || 0);
+    const simCount = Number(allocSim || 0);
+
+    if (b1 <= 0 && ec1 <= 0 && simCount <= 0) {
+      setErrorMsg('Validation Error: At least one distribution field is mandatory. Please provide a value for Batch 1 (₹), EC topup 1 (₹), or Distributed SIM Cards count.');
+      return;
+    }
+
     setShowConfirmModal(true);
   };
 
@@ -294,6 +317,13 @@ export const AllocationsTab: React.FC<AllocationsTabProps> = ({
           {/* Core Input Form */}
           <form onSubmit={handleFormSubmission} className="space-y-4">
             
+            {errorMsg && (
+              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-700 flex items-start gap-2 animate-fade-in">
+                <AlertTriangle className="w-4 h-4 text-[#EE1D23] shrink-0 mt-0.5" />
+                <div className="font-semibold leading-relaxed">{errorMsg}</div>
+              </div>
+            )}
+            
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-[10px] font-extrabold uppercase text-slate-400">Distribution Date</label>
@@ -403,7 +433,6 @@ export const AllocationsTab: React.FC<AllocationsTabProps> = ({
                   <label className="text-[8px] font-extrabold uppercase text-slate-400">Batch 1 (₹)</label>
                   <input
                     type="number"
-                    required
                     value={allocAutoRefill1 === 0 ? '' : allocAutoRefill1}
                     onChange={(e) => setAllocAutoRefill1(e.target.value === '' ? 0 : Number(e.target.value))}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold"
@@ -467,7 +496,6 @@ export const AllocationsTab: React.FC<AllocationsTabProps> = ({
               </div>
               <input
                 type="number"
-                required
                 value={allocSim === 0 ? '' : allocSim}
                 onChange={(e) => setAllocSim(e.target.value === '' ? 0 : Number(e.target.value))}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-[#EE1D23]"

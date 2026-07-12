@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Layers, ClipboardList, TrendingUp, DollarSign, FileText, Users, LogOut, Settings2, Menu, X, HelpCircle, Shield, History, Database } from 'lucide-react';
+import { Layers, ClipboardList, TrendingUp, DollarSign, FileText, Users, LogOut, Settings2, Menu, X, HelpCircle, Shield, History, Database, Sliders } from 'lucide-react';
 import { UserDto, DbStatusDto } from '../types';
 
 interface SidebarProps {
   user: UserDto;
-  activeTab: 'dashboard' | 'dailyStock' | 'allocations' | 'sales' | 'reports' | 'users' | 'masters-fsc' | 'masters-stock' | 'user-roles' | 'audit' | 'configurations' | 'admin-tables';
-  setActiveTab: (tab: 'dashboard' | 'dailyStock' | 'allocations' | 'sales' | 'reports' | 'users' | 'masters-fsc' | 'masters-stock' | 'user-roles' | 'audit' | 'configurations' | 'admin-tables') => void;
+  activeTab: 'dashboard' | 'dailyStock' | 'allocations' | 'sales' | 'reports' | 'users' | 'masters-fsc' | 'masters-stock' | 'user-roles' | 'audit' | 'configurations' | 'admin-tables' | 'dashboard-config';
+  setActiveTab: (tab: 'dashboard' | 'dailyStock' | 'allocations' | 'sales' | 'reports' | 'users' | 'masters-fsc' | 'masters-stock' | 'user-roles' | 'audit' | 'configurations' | 'admin-tables' | 'dashboard-config') => void;
   isStandaloneMode: boolean;
   dbStatus?: DbStatusDto | null;
   onLogOut: () => void;
@@ -64,6 +64,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const masterItems = [
+    {
+      id: 'dashboard-config',
+      label: 'Configure Dashboard',
+      icon: Sliders,
+      visible: isAdminOrManager
+    },
     {
       id: 'masters-fsc',
       label: 'FSC Custom Fields',

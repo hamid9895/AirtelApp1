@@ -65,6 +65,7 @@ export interface Sale {
   ecManual2: number;
   closingBalance: number;
   previousShort: number;
+  todayShort: number;
   saleTotal: number;
   saleAmount: number;
   shortAmount: number;
@@ -193,6 +194,26 @@ export async function initializeDatabase(): Promise<void> {
         await client.query("ALTER TABLE users ADD COLUMN photo TEXT;");
       }
 
+      // Ensure "custom_fields" column exists in daily_stocks, allocations, and sales tables for older PostgreSQL installations
+      const checkColumns = [
+        { table: 'daily_stocks', column: 'custom_fields', type: 'TEXT' },
+        { table: 'allocations', column: 'custom_fields', type: 'TEXT' },
+        { table: 'sales', column: 'custom_fields', type: 'TEXT' },
+        { table: 'sales', column: 'today_short', type: 'REAL NOT NULL DEFAULT 0' }
+      ];
+
+      for (const col of checkColumns) {
+        const hasColRes = await client.query(`
+          SELECT column_name 
+          FROM information_schema.columns 
+          WHERE table_name='${col.table}' AND column_name='${col.column}'
+        `);
+        if (hasColRes.rowCount === 0) {
+          console.log(`[Database] Adding missing "${col.column}" column to ${col.table} table in PostgreSQL...`);
+          await client.query(`ALTER TABLE ${col.table} ADD COLUMN ${col.column} ${col.type};`);
+        }
+      }
+
       console.log('[Database] PostgreSQL migration successfully executed.');
     } catch (err) {
       console.error('[Database] Failed to execute PostgreSQL migrations:', err);
@@ -216,6 +237,25 @@ export async function initializeDatabase(): Promise<void> {
       if (!hasPhoto) {
         console.log('[Database] Adding missing "photo" column to users table in SQLite...');
         await sqliteExec("ALTER TABLE users ADD COLUMN photo TEXT;");
+      }
+
+      // Ensure "custom_fields" column exists in daily_stocks, allocations, and sales tables for older SQLite installations
+      const tablesToCheck = ['daily_stocks', 'allocations', 'sales'];
+      for (const table of tablesToCheck) {
+        const tableCols = await sqliteAll(`PRAGMA table_info(${table})`);
+        const hasCustomFields = tableCols.some((col: any) => col.name === 'custom_fields');
+        if (!hasCustomFields) {
+          console.log(`[Database] Adding missing "custom_fields" column to ${table} table in SQLite...`);
+          await sqliteExec(`ALTER TABLE ${table} ADD COLUMN custom_fields TEXT;`);
+        }
+      }
+
+      // Ensure today_short column exists in sales table for older SQLite installations
+      const salesCols = await sqliteAll("PRAGMA table_info(sales)");
+      const hasTodayShort = salesCols.some((col: any) => col.name === 'today_short');
+      if (!hasTodayShort) {
+        console.log('[Database] Adding missing "today_short" column to sales table in SQLite...');
+        await sqliteExec("ALTER TABLE sales ADD COLUMN today_short REAL NOT NULL DEFAULT 0;");
       }
 
       console.log('[Database] SQLite migration successfully executed.');
@@ -302,6 +342,7 @@ export async function loadDataFromDb(): Promise<DatabaseSchema | null> {
         ecManual2: Number(row.ec_manual2),
         closingBalance: Number(row.closing_balance),
         previousShort: Number(row.previous_short),
+        todayShort: Number(row.today_short || 0),
         saleTotal: Number(row.sale_total),
         saleAmount: Number(row.sale_amount),
         shortAmount: Number(row.short_amount),
@@ -421,6 +462,7 @@ export async function loadDataFromDb(): Promise<DatabaseSchema | null> {
         ecManual2: Number(row.ec_manual2),
         closingBalance: Number(row.closing_balance),
         previousShort: Number(row.previous_short),
+        todayShort: Number(row.today_short || 0),
         saleTotal: Number(row.sale_total),
         saleAmount: Number(row.sale_amount),
         shortAmount: Number(row.short_amount),
@@ -525,13 +567,13 @@ export async function syncDataToDb(schema: DatabaseSchema): Promise<void> {
         await client.query(
           `INSERT INTO sales (
             id, date, fsc_id, allocation_id, opening_balance, auto_refill1, auto_refill2, auto_refill3, 
-            ec_manual1, ec_manual2, closing_balance, previous_short, sale_total, sale_amount, short_amount, 
+            ec_manual1, ec_manual2, closing_balance, previous_short, today_short, sale_total, sale_amount, short_amount, 
             opening_sim, sim, closing_sim, status, remarks, review_note, created_at, submitted_at, 
             reviewed_at, created_by, submitted_by, reviewed_by, custom_fields
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)`,
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)`,
           [
             s.id, s.date, s.fscId, s.allocationId, s.openingBalance, s.autoRefill1, s.autoRefill2, s.autoRefill3,
-            s.ecManual1, s.ecManual2, s.closingBalance, s.previousShort, s.saleTotal, s.saleAmount, s.shortAmount,
+            s.ecManual1, s.ecManual2, s.closingBalance, s.previousShort, s.todayShort || 0, s.saleTotal, s.saleAmount, s.shortAmount,
             s.openingSim, s.sim, s.closingSim, s.status, s.remarks, s.reviewNote, s.createdAt, s.submittedAt,
             s.reviewedAt, s.createdBy, s.submittedBy, s.reviewedBy, JSON.stringify(s.customFields || {})
           ]
@@ -632,13 +674,13 @@ export async function syncDataToDb(schema: DatabaseSchema): Promise<void> {
         await sqliteRun(
           `INSERT INTO sales (
             id, date, fsc_id, allocation_id, opening_balance, auto_refill1, auto_refill2, auto_refill3, 
-            ec_manual1, ec_manual2, closing_balance, previous_short, sale_total, sale_amount, short_amount, 
+            ec_manual1, ec_manual2, closing_balance, previous_short, today_short, sale_total, sale_amount, short_amount, 
             opening_sim, sim, closing_sim, status, remarks, review_note, created_at, submitted_at, 
             reviewed_at, created_by, submitted_by, reviewed_by, custom_fields
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             s.id, s.date, s.fscId, s.allocationId, s.openingBalance, s.autoRefill1, s.autoRefill2, s.autoRefill3,
-            s.ecManual1, s.ecManual2, s.closingBalance, s.previousShort, s.saleTotal, s.saleAmount, s.shortAmount,
+            s.ecManual1, s.ecManual2, s.closingBalance, s.previousShort, s.todayShort || 0, s.saleTotal, s.saleAmount, s.shortAmount,
             s.openingSim, s.sim, s.closingSim, s.status, s.remarks, s.reviewNote, s.createdAt, s.submittedAt,
             s.reviewedAt, s.createdBy, s.submittedBy, s.reviewedBy, JSON.stringify(s.customFields || {})
           ]
