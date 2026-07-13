@@ -35,9 +35,63 @@ import { UserRolesTab } from './components/UserRolesTab';
 import { AuditLogTab } from './components/AuditLogTab';
 import { ConfigurationsTab } from './components/ConfigurationsTab';
 import { TablesTab } from './components/TablesTab';
+import { TopBar } from './components/TopBar';
+import { DashboardConfigTab, DashboardConfig, defaultDashboardConfig } from './components/DashboardConfigTab';
 
 export default function App() {
   // --- CORE STATE MANAGERS ---
+  
+  // Theme state settings
+  const [themePreset, setThemePreset] = useState<'modern' | 'classic'>(
+    (localStorage.getItem('airtel_theme_preset') as 'modern' | 'classic') || 'modern'
+  );
+  const [themeMode, setThemeMode] = useState<'light' | 'dark'>(
+    (localStorage.getItem('airtel_theme_mode') as 'light' | 'dark') || 'light'
+  );
+
+  const handleSetThemePreset = (preset: 'modern' | 'classic') => {
+    setThemePreset(preset);
+    localStorage.setItem('airtel_theme_preset', preset);
+  };
+
+  const handleSetThemeMode = (mode: 'light' | 'dark') => {
+    setThemeMode(mode);
+    localStorage.setItem('airtel_theme_mode', mode);
+  };
+  
+  // Dashboard Allocation & Visibility configuration state
+  const [dashboardConfig, setDashboardConfig] = useState<DashboardConfig>(() => {
+    try {
+      const saved = localStorage.getItem('airtel_dashboard_config');
+      return saved ? { ...defaultDashboardConfig, ...JSON.parse(saved) } : defaultDashboardConfig;
+    } catch {
+      return defaultDashboardConfig;
+    }
+  });
+
+  const handleSaveDashboardConfig = async (updated: DashboardConfig) => {
+    setDashboardConfig(updated);
+    localStorage.setItem('airtel_dashboard_config', JSON.stringify(updated));
+
+    if (token) {
+      try {
+        const res = await fetch('/api/configurations/dashboard', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ dashboardConfig: updated })
+        });
+        const data = await res.json();
+        if (data.success && data.configurations) {
+          setGlobalConfig(data.configurations);
+        }
+      } catch (err) {
+        console.error('Failed to save dashboard config to cloud server:', err);
+      }
+    }
+  };
   
   // JWT Token and Authenticated User States
   const [token, setToken] = useState<string | null>(localStorage.getItem('airtel_token'));
@@ -73,7 +127,7 @@ export default function App() {
   const [loginPassword, setLoginPassword] = useState<string>('');
 
   // Navigation controller
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'dailyStock' | 'allocations' | 'sales' | 'reports' | 'users' | 'masters-fsc' | 'masters-stock' | 'user-roles' | 'audit' | 'configurations' | 'admin-tables'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'dailyStock' | 'allocations' | 'sales' | 'reports' | 'users' | 'masters-fsc' | 'masters-stock' | 'user-roles' | 'audit' | 'configurations' | 'admin-tables' | 'dashboard-config'>('dashboard');
 
   // Primary Data Stores
   const [dailyStocks, setDailyStocks] = useState<DailyStock[]>([]);
@@ -125,6 +179,7 @@ export default function App() {
   const [saleSim, setSaleSim] = useState<number>(0);
   const [saleClosingSim, setSaleClosingSim] = useState<number>(0);
   const [saleRemarks, setSaleRemarks] = useState<string>('');
+  const [saleTodayShort, setSaleTodayShort] = useState<number>(0);
 
   // Admin User Creation Fields
   const [userName, setUserName] = useState<string>('');
@@ -191,7 +246,7 @@ export default function App() {
   const allowedTabsForUser = React.useMemo(() => {
     if (!user) return [];
     if (user.role === 'Admin') {
-      return ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'masters-fsc', 'masters-stock', 'user-roles', 'audit', 'configurations', 'admin-tables'];
+      return ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'users', 'masters-fsc', 'masters-stock', 'user-roles', 'audit', 'configurations', 'admin-tables', 'dashboard-config'];
     }
     const matchingPermission = rolePermissions.find(p => p.role === user.role);
     if (matchingPermission) {
@@ -199,12 +254,15 @@ export default function App() {
       if ((user.role === 'Admin' || user.role === 'Manager') && !tabs.includes('configurations')) {
         tabs.push('configurations');
       }
+      if ((user.role === 'Admin' || user.role === 'Manager') && !tabs.includes('dashboard-config')) {
+        tabs.push('dashboard-config');
+      }
       return tabs;
     }
     
     // Fallback safety values before live API data is parsed
     if (user.role === 'Manager') {
-      return ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'masters-fsc', 'masters-stock', 'audit', 'configurations'];
+      return ['dashboard', 'dailyStock', 'allocations', 'sales', 'reports', 'masters-fsc', 'masters-stock', 'audit', 'configurations', 'dashboard-config'];
     }
     if (user.role === 'Approver') {
       return ['dashboard', 'sales', 'reports'];
@@ -232,30 +290,59 @@ export default function App() {
 
   // Watch distributions for automatically populating sale forms on date selection
   useEffect(() => {
-    if (saleDate && (user?.role === 'FSC' ? user.id : saleFscId)) {
+    if (saleDate && (user?.role === 'FSC' ? user.id : saleFscId) && !editingSaleId) {
       const selectedFscId = user?.role === 'FSC' ? user.id : saleFscId;
-      const match = allocations.find(a => a.date === saleDate && a.fscId === selectedFscId);
-      if (match) {
-        setSaleOpeningBalance(match.openingBalance);
-        setSaleAutoRefill1(match.autoRefill1);
-        setSaleAutoRefill2(match.autoRefill2);
-        setSaleAutoRefill3(match.autoRefill3);
-        setSaleEcManual1(match.ecManual1);
-        setSaleEcManual2(match.ecManual2);
-        setSaleOpeningSim(match.openingSim);
-        setSaleSim(match.sim);
+      
+      // Get previous sales sheet for this FSC strictly prior to saleDate
+      const previousSales = sales
+        .filter(s => s.fscId === selectedFscId && s.date < saleDate)
+        .sort((a, b) => b.date.localeCompare(a.date));
+      const lastDayClosingBalance = previousSales.length > 0 ? previousSales[0].closingBalance : 0;
+      const lastDayShortAmount = previousSales.length > 0 ? previousSales[0].shortAmount : 0;
+      
+      setSaleOpeningBalance(lastDayClosingBalance);
+      setSalePreviousShort(lastDayShortAmount);
+
+      const matches = allocations.filter(a => a.date === saleDate && a.fscId === selectedFscId);
+      if (matches.length > 0) {
+        const sumAutoRefill1 = matches.reduce((sum, a) => sum + (a.autoRefill1 || 0), 0);
+        const sumAutoRefill2 = matches.reduce((sum, a) => sum + (a.autoRefill2 || 0), 0);
+        const sumAutoRefill3 = matches.reduce((sum, a) => sum + (a.autoRefill3 || 0), 0);
+        const sumEcManual1 = matches.reduce((sum, a) => sum + (a.ecManual1 || 0), 0);
+        const sumEcManual2 = matches.reduce((sum, a) => sum + (a.ecManual2 || 0), 0);
+        const sumSim = matches.reduce((sum, a) => sum + (a.sim || 0), 0);
+
+        setSaleAutoRefill1(sumAutoRefill1);
+        setSaleAutoRefill2(sumAutoRefill2);
+        setSaleAutoRefill3(sumAutoRefill3);
+        setSaleEcManual1(sumEcManual1);
+        setSaleEcManual2(sumEcManual2);
+        setSaleOpeningSim(sumSim); // Today's distributed SIM count
       } else {
-        setSaleOpeningBalance(0);
         setSaleAutoRefill1(0);
         setSaleAutoRefill2(0);
         setSaleAutoRefill3(0);
         setSaleEcManual1(0);
         setSaleEcManual2(0);
         setSaleOpeningSim(0);
-        setSaleSim(0);
       }
+      setSaleClosingBalance(0);
+      setSaleTodayShort(0);
+      setSaleSim(0);
+      setSaleRemarks('');
     }
-  }, [saleDate, saleFscId, allocations, user]);
+  }, [saleDate, saleFscId, allocations, sales, user, editingSaleId]);
+
+  // Reactively calculate dependent sales fields
+  useEffect(() => {
+    const totalRefills = saleAutoRefill1 + saleAutoRefill2 + saleAutoRefill3;
+    const totalEc = saleEcManual1 + saleEcManual2;
+    const calculatedSaleAmount = saleOpeningBalance + totalRefills + totalEc - saleClosingBalance;
+    const rate = globalConfig?.simAmount || 20;
+    
+    setSaleAmount(calculatedSaleAmount);
+    setSaleClosingSim(saleOpeningSim - saleSim);
+  }, [saleOpeningBalance, saleAutoRefill1, saleAutoRefill2, saleAutoRefill3, saleEcManual1, saleEcManual2, saleClosingBalance, saleOpeningSim, saleSim, globalConfig]);
 
   // Auto-populate daily stock opening balance when stockDate changes (and we are not editing)
   useEffect(() => {
@@ -420,6 +507,10 @@ export default function App() {
         const configData = await configRes.json();
         if (configData.success && configData.configurations) {
           setGlobalConfig(configData.configurations);
+          if (configData.configurations.dashboardConfig) {
+            setDashboardConfig(configData.configurations.dashboardConfig);
+            localStorage.setItem('airtel_dashboard_config', JSON.stringify(configData.configurations.dashboardConfig));
+          }
         }
       } catch (e) {
         console.warn('Failed to load global configurations, using local fallback:', e);
@@ -486,6 +577,7 @@ export default function App() {
     setSaleEcManual2(sale.ecManual2 || 0);
     setSaleClosingBalance(sale.closingBalance);
     setSalePreviousShort(sale.previousShort || 0);
+    setSaleTodayShort(sale.todayShort || 0);
     setSaleOpeningSim(sale.openingSim || 0);
     setSaleSim(sale.sim);
     setSaleClosingSim(sale.closingSim || 0);
@@ -546,6 +638,7 @@ export default function App() {
     setSaleEcManual2(0);
     setSaleClosingBalance(0);
     setSalePreviousShort(0);
+    setSaleTodayShort(0);
     setSaleOpeningSim(0);
     setSaleSim(0);
     setSaleClosingSim(0);
@@ -677,6 +770,7 @@ export default function App() {
           ecManual2: saleEcManual2,
           closingBalance: saleClosingBalance,
           previousShort: salePreviousShort,
+          todayShort: saleTodayShort,
           saleAmount: saleAmount,
           openingSim: saleOpeningSim,
           sim: saleSim,
@@ -752,6 +846,17 @@ export default function App() {
 
   // Delete ledger entry (stock, allocation, sales)
   const handleDeleteEntity = async (type: 'stock' | 'allocation' | 'sale', id: string) => {
+    if (type === 'allocation') {
+      const allocation = allocations.find(a => a.id === id);
+      if (allocation) {
+        const salesSheetCreated = sales.some(s => s.date === allocation.date && s.fscId === allocation.fscId);
+        if (salesSheetCreated) {
+          setErrorMsg('Cannot delete allocation because a sales sheet has already been created for this FSC on this date.');
+          return;
+        }
+      }
+    }
+
     showConfirm(
       'Confirm Deletion',
       `Are you sure you want to permanently delete this ${type} record? This action is irreversible.`,
@@ -921,21 +1026,24 @@ export default function App() {
   const criticalAirtelAlerts = React.useMemo(() => {
     const alerts = [];
     const latestStock = dailyStocks[0];
+    const simLimit = dashboardConfig.simThreshold;
+    const flexyLimit = dashboardConfig.flexyThreshold;
+
     if (latestStock) {
-      if (latestStock.sim < 100) {
+      if (latestStock.sim < simLimit) {
         alerts.push({
           item: 'SIM cards inventory',
           threshold: `${latestStock.sim} units`,
           hub: 'NCR Hub North',
-          level: latestStock.sim < 50 ? 'rose' : 'amber'
+          level: latestStock.sim < (simLimit / 2) ? 'rose' : 'amber'
         });
       }
-      if (latestStock.flexy < 20000) {
+      if (latestStock.flexy < flexyLimit) {
         alerts.push({
           item: 'Flexy Airtime Balance',
           threshold: `₹${latestStock.flexy.toLocaleString('en-IN')}`,
           hub: 'East Hub East',
-          level: latestStock.flexy < 10000 ? 'rose' : 'amber'
+          level: latestStock.flexy < (flexyLimit / 2) ? 'rose' : 'amber'
         });
       }
     } else {
@@ -947,26 +1055,28 @@ export default function App() {
       });
     }
     return alerts;
-  }, [dailyStocks]);
+  }, [dailyStocks, dashboardConfig]);
 
   // Render Login panel if unauthenticated
   if (!token || !user) {
     return (
-      <LoginView
-        loginEmail={loginEmail}
-        setLoginEmail={setLoginEmail}
-        loginPassword={loginPassword}
-        setLoginPassword={setLoginPassword}
-        loading={loading}
-        errorMsg={errorMsg}
-        successMsg={successMsg}
-        onSubmit={handleLoginSubmit}
-      />
+      <div className={`theme-${themePreset}-${themeMode} min-h-screen bg-slate-50`}>
+        <LoginView
+          loginEmail={loginEmail}
+          setLoginEmail={setLoginEmail}
+          loginPassword={loginPassword}
+          setLoginPassword={setLoginPassword}
+          loading={loading}
+          errorMsg={errorMsg}
+          successMsg={successMsg}
+          onSubmit={handleLoginSubmit}
+        />
+      </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row selection:bg-[#EE1D23]/10 selection:text-red-950 font-sans">
+    <div className={`theme-${themePreset}-${themeMode} min-h-screen bg-slate-50 flex flex-col lg:flex-row selection:bg-[#EE1D23]/10 selection:text-red-950 font-sans`}>
       
       {/* SIDEBAR NAVIGATION BLOCK */}
       <Sidebar
@@ -981,6 +1091,15 @@ export default function App() {
 
       {/* RIGHT SIDE AREA CONTAINER */}
       <div className="flex-grow flex flex-col min-w-0 h-screen overflow-hidden">
+
+        {/* Dynamic Global Top Bar */}
+        <TopBar
+          activeTab={activeTab}
+          themePreset={themePreset}
+          themeMode={themeMode}
+          onSetThemePreset={handleSetThemePreset}
+          onSetThemeMode={handleSetThemeMode}
+        />
 
         {/* SYSTEM DYNAMIC BANNER OVERLAYS */}
         {(errorMsg || successMsg) && (
@@ -1016,11 +1135,27 @@ export default function App() {
           <DashboardTab
             dailyStocks={dailyStocks}
             sales={sales}
+            allocations={allocations}
             allUsers={allUsers}
             totalStockOnHandAmount={totalStockOnHandAmount}
             totalActiveAgentsCount={totalActiveAgentsCount}
             criticalAirtelAlerts={criticalAirtelAlerts}
             setActiveTab={setActiveTab}
+            config={dashboardConfig}
+            globalConfig={globalConfig}
+            user={user}
+          />
+        )}
+
+        {/* Tab 1.5: Dashboard Configuration Panel */}
+        {activeTab === 'dashboard-config' && (user.role === 'Admin' || user.role === 'Manager') && (
+          <DashboardConfigTab
+            config={dashboardConfig}
+            onSaveConfig={handleSaveDashboardConfig}
+            dailyStocks={dailyStocks}
+            sales={sales}
+            allocations={allocations}
+            globalConfig={globalConfig}
           />
         )}
 
@@ -1057,6 +1192,7 @@ export default function App() {
             allocations={allocations}
             fscUsersList={fscUsersList}
             dailyStocks={dailyStocks}
+            sales={sales}
             onDeleteAllocation={(id) => handleDeleteEntity('allocation', id)}
             onSubmitAllocation={handleCreateAllocation}
             allocDate={allocDate}
@@ -1111,6 +1247,8 @@ export default function App() {
             setSaleAmount={setSaleAmount}
             salePreviousShort={salePreviousShort}
             setSalePreviousShort={setSalePreviousShort}
+            saleTodayShort={saleTodayShort}
+            setSaleTodayShort={setSaleTodayShort}
             saleOpeningSim={saleOpeningSim}
             setSaleOpeningSim={setSaleOpeningSim}
             saleSim={saleSim}
@@ -1133,6 +1271,16 @@ export default function App() {
             onCancelEdit={handleCancelEdit}
             customFieldConfigs={customFieldConfigs}
             globalConfig={globalConfig}
+            saleAutoRefill1={saleAutoRefill1}
+            setSaleAutoRefill1={setSaleAutoRefill1}
+            saleAutoRefill2={saleAutoRefill2}
+            setSaleAutoRefill2={setSaleAutoRefill2}
+            saleAutoRefill3={saleAutoRefill3}
+            setSaleAutoRefill3={setSaleAutoRefill3}
+            saleEcManual1={saleEcManual1}
+            setSaleEcManual1={setSaleEcManual1}
+            saleEcManual2={saleEcManual2}
+            setSaleEcManual2={setSaleEcManual2}
           />
         )}
 

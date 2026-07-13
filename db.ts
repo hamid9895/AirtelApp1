@@ -109,7 +109,7 @@ export interface DatabaseSchema {
   customFieldConfigs: CustomFieldConfig[];
   rolePermissions?: RolePermission[];
   auditLogs?: AuditLogEntry[];
-  configurations?: { commissionPercentage: number; simAmount: number };
+  configurations?: { commissionPercentage: number; simAmount: number; dashboardConfig?: any };
 }
 
 let pgPool: pg.Pool | null = null;
@@ -199,7 +199,8 @@ export async function initializeDatabase(): Promise<void> {
         { table: 'daily_stocks', column: 'custom_fields', type: 'TEXT' },
         { table: 'allocations', column: 'custom_fields', type: 'TEXT' },
         { table: 'sales', column: 'custom_fields', type: 'TEXT' },
-        { table: 'sales', column: 'today_short', type: 'REAL NOT NULL DEFAULT 0' }
+        { table: 'sales', column: 'today_short', type: 'REAL NOT NULL DEFAULT 0' },
+        { table: 'configurations', column: 'dashboard_config', type: 'TEXT' }
       ];
 
       for (const col of checkColumns) {
@@ -256,6 +257,14 @@ export async function initializeDatabase(): Promise<void> {
       if (!hasTodayShort) {
         console.log('[Database] Adding missing "today_short" column to sales table in SQLite...');
         await sqliteExec("ALTER TABLE sales ADD COLUMN today_short REAL NOT NULL DEFAULT 0;");
+      }
+
+      // Ensure dashboard_config column exists in configurations table for older SQLite installations
+      const configCols = await sqliteAll("PRAGMA table_info(configurations)");
+      const hasDashConfig = configCols.some((col: any) => col.name === 'dashboard_config');
+      if (!hasDashConfig) {
+        console.log('[Database] Adding "dashboard_config" column to configurations table in SQLite...');
+        await sqliteExec("ALTER TABLE configurations ADD COLUMN dashboard_config TEXT;");
       }
 
       console.log('[Database] SQLite migration successfully executed.');
@@ -388,6 +397,7 @@ export async function loadDataFromDb(): Promise<DatabaseSchema | null> {
       const configurations = configRes.rowCount > 0 ? {
         commissionPercentage: Number(configRes.rows[0].commission_percentage),
         simAmount: Number(configRes.rows[0].sim_amount),
+        dashboardConfig: configRes.rows[0].dashboard_config ? JSON.parse(configRes.rows[0].dashboard_config) : undefined,
       } : { commissionPercentage: 3.0, simAmount: 150.0 };
 
       return { users, dailyStocks, allocations, sales, customFieldConfigs, rolePermissions, auditLogs, configurations };
@@ -508,6 +518,7 @@ export async function loadDataFromDb(): Promise<DatabaseSchema | null> {
       const configurations = configRows.length > 0 ? {
         commissionPercentage: Number(configRows[0].commission_percentage),
         simAmount: Number(configRows[0].sim_amount),
+        dashboardConfig: configRows[0].dashboard_config ? JSON.parse(configRows[0].dashboard_config) : undefined,
       } : { commissionPercentage: 3.0, simAmount: 150.0 };
 
       return { users, dailyStocks, allocations, sales, customFieldConfigs, rolePermissions, auditLogs, configurations };
@@ -617,8 +628,13 @@ export async function syncDataToDb(schema: DatabaseSchema): Promise<void> {
       // Insert configurations
       if (schema.configurations) {
         await client.query(
-          'INSERT INTO configurations (id, commission_percentage, sim_amount) VALUES ($1, $2, $3)',
-          ['default', schema.configurations.commissionPercentage, schema.configurations.simAmount]
+          'INSERT INTO configurations (id, commission_percentage, sim_amount, dashboard_config) VALUES ($1, $2, $3, $4)',
+          [
+            'default', 
+            schema.configurations.commissionPercentage, 
+            schema.configurations.simAmount, 
+            schema.configurations.dashboardConfig ? JSON.stringify(schema.configurations.dashboardConfig) : null
+          ]
         );
       }
 
@@ -724,8 +740,13 @@ export async function syncDataToDb(schema: DatabaseSchema): Promise<void> {
       // Insert configurations
       if (schema.configurations) {
         await sqliteRun(
-          'INSERT INTO configurations (id, commission_percentage, sim_amount) VALUES (?, ?, ?)',
-          ['default', schema.configurations.commissionPercentage, schema.configurations.simAmount]
+          'INSERT INTO configurations (id, commission_percentage, sim_amount, dashboard_config) VALUES (?, ?, ?, ?)',
+          [
+            'default', 
+            schema.configurations.commissionPercentage, 
+            schema.configurations.simAmount, 
+            schema.configurations.dashboardConfig ? JSON.stringify(schema.configurations.dashboardConfig) : null
+          ]
         );
       }
 

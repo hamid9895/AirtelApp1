@@ -121,7 +121,7 @@ interface DatabaseSchema {
   customFieldConfigs: CustomFieldConfig[];
   rolePermissions?: RolePermission[];
   auditLogs?: AuditLogEntry[];
-  configurations?: { commissionPercentage: number; simAmount: number };
+  configurations?: { commissionPercentage: number; simAmount: number; dashboardConfig?: any };
 }
 
 // --- PASSWORD HASHING ---
@@ -1037,11 +1037,30 @@ app.post('/api/configurations', authenticateToken, requireRole(['Admin', 'Manage
 
   const db = loadDatabase();
   db.configurations = {
+    ...(db.configurations || { commissionPercentage: 3.0, simAmount: 150.0 }),
     commissionPercentage: Number(commissionPercentage),
     simAmount: Number(simAmount)
   };
 
   logAudit(db, req.user, 'UPDATE', 'customField', `Updated configurations: Commission = ${commissionPercentage}%, SIM Amount = ${simAmount}`);
+  saveDatabase(db);
+  res.json({ success: true, configurations: db.configurations });
+});
+
+// POST /api/configurations/dashboard
+app.post('/api/configurations/dashboard', authenticateToken, requireRole(['Admin', 'Manager']), (req: any, res) => {
+  const { dashboardConfig } = req.body;
+  if (dashboardConfig === undefined) {
+    return res.status(400).json({ success: false, error: 'dashboardConfig is required' });
+  }
+
+  const db = loadDatabase();
+  db.configurations = {
+    ...(db.configurations || { commissionPercentage: 3.0, simAmount: 150.0 }),
+    dashboardConfig
+  };
+
+  logAudit(db, req.user, 'UPDATE', 'customField', `Updated dashboard configuration layout`);
   saveDatabase(db);
   res.json({ success: true, configurations: db.configurations });
 });

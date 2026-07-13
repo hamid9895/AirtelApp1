@@ -14,6 +14,7 @@ interface DashboardTabProps {
   setActiveTab: (tab: 'dashboard' | 'dailyStock' | 'allocations' | 'sales' | 'reports' | 'users' | 'masters-fsc' | 'masters-stock' | 'user-roles' | 'audit' | 'configurations' | 'admin-tables' | 'dashboard-config') => void;
   config: DashboardConfig;
   globalConfig: { commissionPercentage: number; simAmount: number } | null;
+  user: UserDto | null;
 }
 
 export const DashboardTab: React.FC<DashboardTabProps> = ({
@@ -26,7 +27,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   criticalAirtelAlerts,
   setActiveTab,
   config,
-  globalConfig
+  globalConfig,
+  user
 }) => {
   const simPrice = globalConfig?.simAmount || 150;
 
@@ -78,6 +80,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     activeConfig.showCoverageMap;
 
   if (!hasVisibleWidgets) {
+    const isAdminOrManager = user && (user.role === 'Admin' || user.role === 'Manager');
     return (
       <div className="bg-white border border-slate-200 rounded-3xl p-12 text-center max-w-lg mx-auto space-y-4 animate-fade-in my-8 shadow-sm">
         <div className="w-12 h-12 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto">
@@ -87,15 +90,20 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           Dashboard is Empty
         </h3>
         <p className="text-xs text-slate-400 leading-relaxed font-semibold">
-          All standard widgets have been de-allocated in the settings. Use the Dashboard Configuration menu to choose which metrics you would like to display.
+          {isAdminOrManager 
+            ? "All standard widgets have been de-allocated in the settings. Use the Dashboard Configuration menu to choose which metrics you would like to display."
+            : "All standard widgets have been de-allocated in the settings. Please contact an Administrator or Manager to configure the dashboard metrics."
+          }
         </p>
-        <button
-          onClick={() => setActiveTab('dashboard-config')}
-          className="bg-[#EE1D23] hover:bg-red-700 text-white text-xs font-black uppercase px-5 py-2.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 mx-auto"
-        >
-          <Settings className="w-3.5 h-3.5" />
-          <span>Configure Dashboard</span>
-        </button>
+        {isAdminOrManager && (
+          <button
+            onClick={() => setActiveTab('dashboard-config')}
+            className="bg-[#EE1D23] hover:bg-red-700 text-white text-xs font-black uppercase px-5 py-2.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 mx-auto"
+          >
+            <Settings className="w-3.5 h-3.5" />
+            <span>Configure Dashboard</span>
+          </button>
+        )}
       </div>
     );
   }
